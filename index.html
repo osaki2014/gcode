@@ -491,7 +491,7 @@ function updateTextLineUI(){
  lineHighlight.style.display=(top>-18 && top<ta.clientHeight)?"block":"none";
  lineHelpBar.innerHTML=`<b>L${ln+1}</b>　${escapeHtml(explainGcodeLine(ln))}`;
 }
-function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","'":"&#39;"}[c]))}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function updateSelectedInfo(){
  const box=$("selectedInfo");
  if(state.selected<0||!state.segments[state.selected]){box.style.display="none";return}
