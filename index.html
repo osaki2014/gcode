@@ -18,7 +18,7 @@ button.active{background:var(--accent);color:white;border-color:var(--accent)}
 button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
 button.danger{color:#a33}
 select,input{border:1px solid var(--line);border-radius:7px;background:#fff;padding:6px 7px}
-#app{height:100%;display:grid;grid-template-rows:auto auto 1fr auto}
+#app{height:100%;display:grid;grid-template-rows:auto auto auto 1fr auto}
 header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;border-bottom:1px solid var(--line);background:#fff}
 .brand{font-size:18px;font-weight:700;letter-spacing:.1px;white-space:nowrap}
 .brand small{font-size:11px;color:var(--muted);font-weight:500;margin-left:8px}
@@ -83,6 +83,28 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
 #repairPanel .warnLine{color:#9a4f1e}
 #repairPanel .okLine{color:#236a4c}
 
+
+#designBar{display:flex;align-items:center;gap:9px;padding:6px 12px;background:#eef5f1;border-bottom:1px solid #cfddd5;overflow-x:auto;white-space:nowrap;font-size:11px;color:#496057}
+#designBar .designTitle{font-weight:800;color:#1f5f47;font-size:12px}
+#designBar .metric{display:flex;align-items:baseline;gap:4px;padding:4px 7px;background:#fff;border:1px solid #d4dfd8;border-radius:7px}
+#designBar .metric b{color:#17211d;font-size:12px}
+#designBar .metric small{color:#6a776f;font-size:10px}
+#designBar select{padding:4px 6px;font-size:11px}
+#designBar button{padding:5px 8px;font-size:11px}
+#modelHelpModal .dialog{width:min(860px,94vw)}
+.modelLead{font-size:14px!important;color:#243b32!important;background:#edf6f1;border-left:4px solid var(--accent);padding:10px 12px;border-radius:7px}
+.modelSection{margin:14px 0;padding-top:2px}
+.modelSection h3{font-size:15px;margin:8px 0 7px}
+.formula{padding:9px 11px;margin:7px 0;background:#f2f3f1;border:1px solid #dedfda;border-radius:8px;font:14px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;overflow-x:auto;color:#18201c}
+.formula .sub{font-size:.72em;vertical-align:sub}
+.modelTable{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0}
+.modelTable th,.modelTable td{border-bottom:1px solid #e1e1dd;text-align:left;padding:7px 8px;vertical-align:top}
+.modelTable th{background:#f6f6f3}
+.modelRefs a{color:#175a41;word-break:break-all}
+.modelRefs li{margin:6px 0}
+#modelExample{background:#fff8e9;border:1px solid #ead7aa;border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.7}
+.designWarn{color:#9a4f1e;font-weight:650}
+
 </style>
 </head>
 <body>
@@ -122,7 +144,23 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
   <div class="field"><label>線幅</label><button class="helpDot" data-help="lineWidth" title="線幅とは？">?</button><input id="lineWidth" type="number" value="0.8" step=".05"><span>mm</span></div>
   <div class="field"><label>高さ</label><button class="helpDot" data-help="layerHeight" title="高さとは？">?</button><input id="layerHeight" type="number" value="0.4" step=".05"><span>mm</span></div>
   <div class="field"><label>Flow</label><button class="helpDot" data-help="flow" title="Flowとは？">?</button><input id="flow" type="number" value="0.98" step=".01"></div>
+  <div class="field"><label>MVS</label><button class="helpDot" data-help="mvs" title="MVSとは？">?</button><input id="mvs" type="number" value="21" step="0.5"><span>mm³/s</span></div>
+  <div class="field"><label>安全率</label><button class="helpDot" data-help="safety" title="安全率とは？">?</button><input id="safety" type="number" value="75" min="20" max="100" step="5"><span>%</span></div>
   <button id="applySettings" class="primary">一括反映（温度・全速度）</button>
+</div>
+
+<div id="designBar">
+  <span class="designTitle">材料・ノズル設計モデル</span>
+  <span>基準</span><select id="designBasis"><option value="bambu" selected>Bambu標準近似</option><option value="general">一般110%幅</option></select>
+  <span class="metric"><small>推奨線幅</small><b id="recWidth">—</b></span>
+  <span class="metric"><small>推奨高さ</small><b id="recHeight">—</b></span>
+  <span class="metric"><small>断面積 A</small><b id="recArea">—</b></span>
+  <span class="metric"><small>理論上限</small><b id="maxSpeedModel">—</b></span>
+  <span class="metric"><small>推奨造形速度</small><b id="recSpeedModel">—</b></span>
+  <span class="metric"><small>E / 100 mm</small><b id="recE100">—</b></span>
+  <span class="metric"><small>現在の流量</small><b id="currentQ">—</b></span>
+  <button id="applyDesignBtn">推奨値を入力欄へ</button>
+  <button id="modelHelpBtn" class="primary">考え方・数式・文献</button>
 </div>
 
 <div id="workspace">
@@ -213,6 +251,78 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
 
 <input id="fileInput" type="file" accept=".gcode,.txt" hidden>
 
+
+<div id="modelHelpModal" class="modal">
+<div class="dialog">
+  <h2>材料・ノズル・速度・押出し量をどう決めるか</h2>
+  <p class="modelLead">いちばん大事な考えは「1秒間に、ホットエンドが無理なく溶かせる樹脂の体積には上限がある」です。太い線を速く引くほど、1秒に必要な樹脂が増えます。そこで、線の太さと材料の流せる量から、安全な速さを逆算します。</p>
+
+  <div class="modelSection">
+   <h3>1. まず、ノズルが置く樹脂線の太さを決めます</h3>
+   <p>ノズルから出た樹脂は、真四角ではなく「上と下が平らで、左右が丸い」形に近いと考えます。幅を <b>w</b> [mm]、高さを <b>h</b> [mm] とすると、このアプリでは断面積 <b>A</b> [mm²] を次で近似します。</p>
+   <div class="formula">A = h(w − h) + πh² / 4　（w ≥ h のとき）</div>
+   <p>小学生向けに言えば、<b>「線を横から切った面積」</b>です。面積が2倍なら、同じ速さで進むには約2倍の樹脂が必要です。</p>
+  </div>
+
+  <div class="modelSection">
+   <h3>2. 1秒に必要な樹脂の量を計算します</h3>
+   <div class="formula">Q = A × v</div>
+   <p><b>Q</b> は体積流量 [mm³/s]、<b>v</b> はノズルの造形速度 [mm/s] です。たとえば断面積が0.30 mm²で、50 mm/sで動けば、1秒に約15 mm³の樹脂が必要です。</p>
+   <p>材料とホットエンドには、安定して溶かせる上限 <b>Q<sub>max</sub></b> があります。スライサーではこれを <b>MVS (Maximum Volumetric Speed)</b> と呼びます。</p>
+   <div class="formula">v<span class="sub">max</span> = Q<span class="sub">max</span> / A</div>
+   <p>この式は「1秒に流せる量 ÷ 線の断面積 = 進める速さ」です。</p>
+  </div>
+
+  <div class="modelSection">
+   <h3>3. 上限ぴったりではなく、余裕を残します</h3>
+   <div class="formula">v<span class="sub">rec</span> = s × v<span class="sub">max</span></div>
+   <p><b>s</b> は安全率です。初期値75%なら、理論上限の0.75倍を推奨速度にします。実際の造形では、温度、曲がり角、冷却、樹脂の乾燥状態、非平面軌跡の支持状態などが効くためです。</p>
+  </div>
+
+  <div class="modelSection">
+   <h3>4. G-codeの E（フィラメント長）を計算します</h3>
+   <p>直径1.75 mmのフィラメントの断面積を <b>A<sub>f</sub></b> とすると、</p>
+   <div class="formula">A<span class="sub">f</span> = π(1.75 / 2)² ≈ 2.405 mm²</div>
+   <p>長さ <b>L</b> [mm] の樹脂線に必要なフィラメント長 <b>E</b> [mm] は、</p>
+   <div class="formula">E = (A × L / A<span class="sub">f</span>) × Flow</div>
+   <p><b>Flow</b> は微調整の倍率です。0.98なら理論量の98%、1.00なら100%です。この式で、図面上の線の長さからG-codeのEを自動生成します。</p>
+  </div>
+
+  <div class="modelSection">
+   <h3>5. 線幅と高さはどう決める？</h3>
+   <table class="modelTable"><tr><th>項目</th><th>このアプリの初期設計</th><th>意味</th></tr>
+   <tr><td>線幅 w</td><td>Bambu標準近似：ノズル径 + 0.02 mm<br>一般基準：約1.10 × ノズル径</td><td>太いほど丈夫な線を作りやすいが、同じMVSなら速度は下がります。</td></tr>
+   <tr><td>高さ h</td><td>0.50 × ノズル径</td><td>0.8 mmノズルなら0.40 mmを初期値にします。高すぎると線がつぶれにくく接着が不安定になります。</td></tr>
+   <tr><td>MVS</td><td>材料プロファイルを初期値として読み込み、手動変更可能</td><td>「材料だけ」の定数ではなく、ホットエンド・温度・ノズル径にも依存する実用上限です。</td></tr>
+   </table>
+   <p>PrusaSlicerは一般的な押出幅の目安をノズル径の約110%、自動値を1.125倍としています。一方、Bambu StudioのA1 mini 0.8 mm標準プロセス系では0.82 mmの線幅と0.40 mmの高さが使われます。本アプリではBambu機を使う前提で「Bambu標準近似」を既定にしています。</p>
+  </div>
+
+  <div class="modelSection">
+   <h3>6. 移動速度は材料の式とは別です</h3>
+   <p>樹脂を出さない移動では Q = 0 なのでMVSは制限になりません。移動速度はプリンタの最高速度・加速度、軌跡の長さ、ノズルが作品にぶつからないかで決まります。特に非平面G-codeでは衝突回避をスライサーに任せられないため、このアプリは高速な公称値ではなく、保守的な初期値を使います。</p>
+   <p>短い距離では、設定速度まで加速する前に減速が始まります。単純な左右対称の加減速なら、距離 L と加速度 a からピーク速度のおおよその関係は <b>v ≈ √(aL)</b> です。ただし実機ファームウェアではジャークや加速度制限も入ります。</p>
+  </div>
+
+  <div id="modelExample"><b>現在の設定での計算例</b><div id="modelExampleBody">—</div></div>
+
+  <div class="modelSection modelRefs">
+   <h3>参考資料・根拠</h3>
+   <ul>
+    <li><a href="https://help.prusa3d.com/article/max-volumetric-speed_127176" target="_blank" rel="noopener">Prusa Knowledge Base: Max volumetric speed</a> — MVS、Q=A×v、MVS/断面積による速度制限、stadium形断面の説明。</li>
+    <li><a href="https://help.prusa3d.com/article/creating-profiles-for-different-nozzles_127540" target="_blank" rel="noopener">Prusa Knowledge Base: Creating profiles for different nozzles</a> — 押出幅は一般にノズル径の約110%、自動値1.125倍。</li>
+    <li><a href="https://github.com/bambulab/BambuStudio/blob/master/resources/profiles/BBL/process/fdm_process_single_0.40_nozzle_0.8.json" target="_blank" rel="noopener">Bambu Studio official profile: 0.8 mm / 0.40 mm process base</a> — 0.8 mmノズル系の標準線幅0.82 mm、高さ0.40 mm。</li>
+    <li><a href="https://github.com/bambulab/BambuStudio/blob/master/resources/profiles/BBL/filament/Bambu%20PLA%20Basic%20%40base.json" target="_blank" rel="noopener">Bambu Studio official profile: Bambu PLA Basic</a> — Flow 0.98、MVS 21 mm³/s。</li>
+    <li><a href="https://github.com/bambulab/BambuStudio/blob/master/resources/profiles/BBL/filament/Bambu%20PETG%20HF%20%40BBL%20A1M%200.8%20nozzle.json" target="_blank" rel="noopener">Bambu Studio official profile: PETG HF / A1 mini / 0.8</a> — Flow 0.94、MVS 18 mm³/s、ノズル240℃。</li>
+    <li><a href="https://github.com/bambulab/BambuStudio/blob/master/resources/profiles/BBL/filament/Bambu%20TPU%2095A%20%40BBL%20A1M.json" target="_blank" rel="noopener">Bambu Studio official profile: TPU 95A / A1 mini</a> — MVS 3.6 mm³/s。</li>
+    <li><a href="https://www.sciencedirect.com/science/article/pii/S2214860421003699" target="_blank" rel="noopener">Filament rheological characterization for fused filament fabrication additive manufacturing</a> — FFFノズル流れをpower-law粘度モデルで扱う研究。</li>
+   </ul>
+  </div>
+  <p><b>重要:</b> ここで出す値は「安全な出発点を作る設計モデル」であり、材料ロットや湿気、実際のホットエンド、非平面形状まで含めた唯一の最適値ではありません。MVSは実機の流量テストで校正すると精度が上がります。</p>
+  <div style="text-align:right"><button id="closeModelHelp" class="primary">閉じる</button></div>
+</div>
+</div>
+
 <div id="helpModal" class="modal">
 <div class="dialog">
   <h2>GcodeEditor</h2>
@@ -224,7 +334,7 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
     <li><b>テキスト直接編集</b>: M104/M109/M140/M190、F値、XYZ/Eなどを直接変更できます。変更後は3D表示が自動更新されます。</li>
     <li><b>3MF出力</b>: Bambu Studioが前回正常に開いた方式と同じく、十分なCONFIG_BLOCK、T0初期化、サムネイル、slice_info、MD5を含む .gcode.3mf を生成します。</li>
   </ul>
-  <p><b>安全:</b> カスタムG-codeはスライサーの衝突回避を通りません。出力前に造形範囲、開始位置、Z高さ、ノズル温度、送り速度を確認してください。</p>
+  <p><b>材料・ノズル設計:</b> 上部の緑色バーで、MVSと樹脂線断面から推奨造形速度、E/100 mmを自動計算できます。「考え方・数式・文献」で小学5年生向け説明と厳密な式を確認できます。</p><p><b>安全:</b> カスタムG-codeはスライサーの衝突回避を通りません。出力前に造形範囲、開始位置、Z高さ、ノズル温度、送り速度を確認してください。</p>
   <button id="closeHelp" class="primary">閉じる</button>
 </div>
 </div>
@@ -238,16 +348,16 @@ const canvas=$("view"), ctx=canvas.getContext("2d");
 const ta=$("gcode"), nums=$("lineNums"), lineHighlight=$("lineHighlight"), lineHelpBar=$("lineHelpBar");
 
 const MACHINES = {
-  a1mini:{name:"Bambu Lab A1 mini", modelId:"N1", bed:[180,180,180], code:"A1M"},
-  a1:{name:"Bambu Lab A1", modelId:"N2S", bed:[256,256,256], code:"A1"},
-  p1s:{name:"Bambu Lab P1S", modelId:"C12", bed:[256,256,256], code:"X1C"}
+  a1mini:{name:"Bambu Lab A1 mini", modelId:"N1", bed:[180,180,180], code:"A1M", travelRec:100},
+  a1:{name:"Bambu Lab A1", modelId:"N2S", bed:[256,256,256], code:"A1", travelRec:120},
+  p1s:{name:"Bambu Lab P1S", modelId:"C12", bed:[256,256,256], code:"X1C", travelRec:150}
 };
 const MATERIALS = {
-  pla_basic:{name:"Bambu PLA Basic", type:"PLA", id:"GFA00", nozzle:220, bed:55, density:1.26, flow:.98},
-  generic_pla:{name:"Generic PLA", type:"PLA", id:"", nozzle:220, bed:55, density:1.24, flow:1.00},
-  petg_hf:{name:"Bambu PETG HF", type:"PETG", id:"", nozzle:245, bed:70, density:1.25, flow:.95},
-  generic_petg:{name:"Generic PETG", type:"PETG", id:"", nozzle:255, bed:70, density:1.25, flow:.95},
-  tpu95:{name:"Bambu TPU 95A", type:"TPU", id:"", nozzle:230, bed:35, density:1.22, flow:1.00}
+  pla_basic:{name:"Bambu PLA Basic", type:"PLA", id:"GFA00", nozzle:220, bed:65, density:1.26, flow:.98, mvs:21, source:"Bambu公式プロファイル"},
+  generic_pla:{name:"Generic PLA", type:"PLA", id:"GFL99", nozzle:220, bed:65, density:1.24, flow:.98, mvs:12, source:"Bambu Generic PLA系の保守値"},
+  petg_hf:{name:"Bambu PETG HF", type:"PETG", id:"GFG02", nozzle:240, bed:70, density:1.28, flow:.94, mvs:18, source:"Bambu A1 mini PETG HFプロファイル"},
+  generic_petg:{name:"Generic PETG", type:"PETG", id:"GFG99", nozzle:255, bed:70, density:1.25, flow:.95, mvs:12, source:"Bambu Generic PETGプロファイル"},
+  tpu95:{name:"Bambu TPU 95A", type:"TPU", id:"GFU01", nozzle:230, bed:30, density:1.22, flow:1.00, mvs:3.6, source:"Bambu A1 mini TPU 95Aプロファイル"}
 };
 
 let state={
@@ -268,6 +378,71 @@ function norm(a){const l=len(a)||1;return mul(a,1/l)}
 function dist3(a,b){return len(sub(a,b))}
 function clamp(x,a,b){return Math.max(a,Math.min(b,x))}
 function fmt(n,d=3){return Number(n).toFixed(d).replace(/\.?0+$/,"")}
+
+function beadArea(width,height){
+ width=+width;height=+height;
+ if(!(width>0&&height>0))return NaN;
+ if(width>=height)return height*(width-height)+Math.PI*height*height/4;
+ // If a user enters h>w, use an ellipse only as a fallback and show a warning in the model panel.
+ return Math.PI*width*height/4;
+}
+function filamentArea(d=1.75){return Math.PI*(d/2)*(d/2)}
+function recommendedGeometry(nozzle,basis=$("designBasis")?.value||"bambu"){
+ const d=+nozzle;
+ const width=basis==="general"?1.10*d:d+0.02;
+ const height=0.50*d;
+ return{width:+width.toFixed(3),height:+height.toFixed(3)};
+}
+function designResult(useRecommendedGeometry=true){
+ const mat=MATERIALS[$("material").value],mach=MACHINES[$("machine").value],d=+$("nozzle").value;
+ const geo=recommendedGeometry(d),w=useRecommendedGeometry?geo.width:+$("lineWidth").value,h=useRecommendedGeometry?geo.height:+$("layerHeight").value;
+ const A=beadArea(w,h),mvs=+$("mvs").value||mat.mvs,safety=clamp((+$("safety").value||75)/100,.2,1);
+ const vmax=mvs/A,vrec=vmax*safety,flow=+$("flow").value||mat.flow;
+ const e100=A*100/filamentArea(1.75)*flow;
+ const currentV=+$("printSpeed").value||0,currentQ=A*currentV;
+ return{mat,mach,d,w,h,A,mvs,safety,vmax,vrec,flow,e100,currentV,currentQ,travel:mach.travelRec,geo};
+}
+function updateDesignModel(){
+ const r=designResult(true);
+ $("recWidth").textContent=`${fmt(r.w,3)} mm`;
+ $("recHeight").textContent=`${fmt(r.h,3)} mm`;
+ $("recArea").textContent=`${fmt(r.A,3)} mm²`;
+ $("maxSpeedModel").textContent=`${fmt(r.vmax,1)} mm/s`;
+ $("recSpeedModel").textContent=`${fmt(r.vrec,1)} mm/s`;
+ $("recE100").textContent=`${fmt(r.e100,2)} mm`;
+ const pct=r.mvs>0?100*r.currentQ/r.mvs:0;
+ $("currentQ").innerHTML=`${fmt(r.currentQ,2)} mm³/s <span class="${pct>100?'designWarn':''}">(${fmt(pct,0)}% MVS)</span>`;
+ const body=$("modelExampleBody");
+ if(body)body.innerHTML=`<br>素材: <b>${r.mat.name}</b> / ノズル: <b>${fmt(r.d,2)} mm</b> / MVS: <b>${fmt(r.mvs,1)} mm³/s</b><br>`+
+   `w=${fmt(r.w,3)} mm, h=${fmt(r.h,3)} mm → A=${fmt(r.A,4)} mm²<br>`+
+   `v_max = ${fmt(r.mvs,2)} ÷ ${fmt(r.A,4)} = <b>${fmt(r.vmax,2)} mm/s</b><br>`+
+   `安全率 ${fmt(r.safety*100,0)}% → v_rec = <b>${fmt(r.vrec,2)} mm/s</b><br>`+
+   `100 mmの線に必要なE ≈ <b>${fmt(r.e100,3)} mm</b>（Flow=${fmt(r.flow,3)}）<br>`+
+   `非造形移動のアプリ初期値: <b>${fmt(r.travel,0)} mm/s</b>（MVSからではなく、非平面軌跡向けの保守値）`;
+}
+function syncMaterialModelDefaults(){
+ const mat=MATERIALS[$("material").value];
+ $("mvs").value=mat.mvs;
+ $("hotend").value=mat.nozzle;
+ $("bedtemp").value=mat.bed;
+ $("flow").value=mat.flow;
+ updateDesignModel();
+}
+function applyRecommendedDesign(){
+ const r=designResult(true);
+ $("lineWidth").value=fmt(r.w,3);$("layerHeight").value=fmt(r.h,3);
+ $("flow").value=r.mat.flow;$("hotend").value=r.mat.nozzle;$("bedtemp").value=r.mat.bed;$("mvs").value=r.mat.mvs;
+ // Recalculate after profile values are loaded.
+ const rr=designResult(true);$("printSpeed").value=fmt(rr.vrec,2);$("travelSpeed").value=fmt(rr.travel,1);
+ updateDesignModel();
+ showRepairReport([
+   `素材 ${rr.mat.name} のプロファイル初期値を読み込みました。`,
+   `線幅 ${fmt(rr.w,3)} mm、高さ ${fmt(rr.h,3)} mm。`,
+   `MVS ${fmt(rr.mvs,1)} mm³/s、安全率 ${fmt(rr.safety*100,0)}% → 推奨造形速度 ${fmt(rr.vrec,2)} mm/s。`,
+   `非造形移動速度は保守値 ${fmt(rr.travel,0)} mm/s を入力しました。`,
+   `まだG-code本体は変更していません。「一括反映（温度・全速度）」でF値等へ反映してください。`
+ ],[],"推奨設計値を入力欄へ設定しました");
+}
 
 function camera(){
  const cp=Math.cos(state.pitch), sp=Math.sin(state.pitch);
@@ -598,7 +773,8 @@ function addDrawPoint(p){
  const d=dist3(state.drawAnchor,p);
  if(d<1e-6)return;
  const width=+$("lineWidth").value||.8,height=+$("layerHeight").value||.4,flow=+$("flow").value||1;
- const de=d*width*height/(Math.PI*(1.75/2)**2)*flow;
+ const area=beadArea(width,height);
+ const de=d*area/filamentArea(1.75)*flow;
  const parsed=parseGcode(ta.value), F=Math.round((+$("printSpeed").value||10)*60);
  const ev=parsed.last.absE ? parsed.last.e+de : de;
  appendLine(`G1 X${fmt(p.x)} Y${fmt(p.y)} Z${fmt(p.z)} E${fmt(ev,5)} F${F}`);
@@ -619,10 +795,15 @@ function setView(name){
 }
 document.querySelectorAll(".viewBtn").forEach(b=>b.onclick=()=>setView(b.dataset.view));
 
-$("material").addEventListener("change",()=>{
- const m=MATERIALS[$("material").value];$("hotend").value=m.nozzle;$("bedtemp").value=m.bed;$("flow").value=m.flow;reparse(false)
-});
-["machine","nozzle"].forEach(id=>$(id).addEventListener("change",()=>{state.selected=-1;reparse(false)}));
+$("material").addEventListener("change",()=>{syncMaterialModelDefaults();reparse(false)});
+$("machine").addEventListener("change",()=>{state.selected=-1;updateDesignModel();reparse(false)});
+$("nozzle").addEventListener("change",()=>{state.selected=-1;updateDesignModel();reparse(false)});
+$("designBasis").addEventListener("change",updateDesignModel);
+["mvs","safety","lineWidth","layerHeight","flow","printSpeed"].forEach(id=>$(id).addEventListener("input",updateDesignModel));
+$("applyDesignBtn").onclick=applyRecommendedDesign;
+$("modelHelpBtn").onclick=()=>{$("modelHelpModal").classList.add("show");updateDesignModel()};
+$("closeModelHelp").onclick=()=>$("modelHelpModal").classList.remove("show");
+$("modelHelpModal").onclick=e=>{if(e.target===$("modelHelpModal"))$("modelHelpModal").classList.remove("show")};
 
 function replaceFirstOrInsert(lines,re,value){
  const idx=lines.findIndex(l=>re.test(l.split(";")[0].trim()));
@@ -845,7 +1026,7 @@ function makeConfigBlock(){
  ["nozzle_diameter",String(noz)],["nozzle_type",noz>=.6?"hardened_steel":"stainless_steel"],
  ["printable_area",`0x0,${mach.bed[0]}x0,${mach.bed[0]}x${mach.bed[1]},0x${mach.bed[1]}`],["printable_height",String(mach.bed[2])],
  ["filament_settings_id",`${mat.name} @BBL ${mach.code}`],["filament_type",mat.type],["filament_ids",mat.id],
- ["filament_colour","#FFFFFF"],["filament_diameter","1.75"],["filament_density",String(mat.density)],["filament_flow_ratio",String(flow)],
+ ["filament_colour","#FFFFFF"],["filament_diameter","1.75"],["filament_density",String(mat.density)],["filament_flow_ratio",String(flow)],["filament_max_volumetric_speed",String(+( $("mvs").value || mat.mvs ))],
  ["filament_map","1"],["filament_is_support","0"],["filament_soluble","0"],["curr_bed_type","Textured PEI Plate"],
  ["print_settings_id","GcodeEditor custom"],["nozzle_temperature",String(h)],["nozzle_temperature_initial_layer",String(h)],
  ["textured_plate_temp",String(b)],["textured_plate_temp_initial_layer",String(b)],["use_relative_e_distances","0"],
@@ -1000,11 +1181,13 @@ $("save3mfBtn").onclick=async()=>{
 
 const SETTING_HELP={
  snap:{title:'Snap（スナップ）',body:'<p>線画で点を置くとき、座標を一定の刻みに吸着させる機能です。</p><p><b>Snap 1</b>なら X/Y/Z が1 mm刻み、<b>0.5</b>なら0.5 mm刻みに丸められます。<b>OFF</b>ではクリック位置をそのまま使います。</p><p>正確な格子状の図形を描くときは1 mmや0.5 mm、自由な曲線に近い折れ線を作るときは0.1 mmやOFFが便利です。</p>'},
- flow:{title:'Flow（押出し倍率）',body:'<p>線画から新しいG1を作るときの<b>フィラメント押出し量Eの倍率</b>です。</p><p>1.00＝計算量の100%、0.98＝98%、1.05＝105%です。線幅×高さ×線の長さから求めた理論押出量にFlowを掛けます。</p><p>既存G-codeのE値を勝手に変更すると造形が大きく変わるため、一括反映では既存Eは変更しません。</p>'},
- lineWidth:{title:'線幅',body:'<p>ノズルが置いていく<b>1本の樹脂線（ビード）の想定幅</b>です。0.8 mmノズルなら0.8〜0.82 mm程度を基準にできます。</p><p>GcodeEditorでは新しく線を描く際のE量計算と、Bambu Studio用3MFのプレビュー情報に使います。</p>'},
- layerHeight:{title:'高さ',body:'<p>1本の樹脂線の<b>想定断面高さ</b>です。通常積層ではレイヤー高さに相当します。</p><p>このアプリは非平面軌跡も扱うため、Z座標の増分そのものではありません。E量を計算するための「樹脂線の厚み」と考えてください。</p>'},
+ flow:{title:'Flow（押出し倍率）',body:'<p>線画から新しいG1を作るときの<b>フィラメント押出し量Eの微調整倍率</b>です。</p><p>1.00＝理論量の100%、0.98＝98%。このアプリでは樹脂線を左右が丸いstadium形と近似し、断面積 A=h(w−h)+πh²/4 を求め、E=(A×線長/フィラメント断面積)×Flow で計算します。</p><p>Flowは材料プロファイルの校正値なので、既存G-codeのEを一括で勝手に変更しません。</p>'},
+ lineWidth:{title:'線幅',body:'<p>ノズルが置く<b>1本の樹脂線を上から見た幅 w</b>です。太くすると1 mm進むごとに必要な樹脂が増えるので、同じMVSなら最大速度は下がります。</p><p>Bambu標準近似ではノズル径+0.02 mm、一般基準では約1.10×ノズル径を初期値にします。右の「考え方・数式・文献」で根拠を確認できます。</p>'},
+ layerHeight:{title:'高さ',body:'<p>樹脂線を横から見た<b>断面の高さ h</b>です。通常積層ならレイヤー高さに相当します。</p><p>非平面軌跡では「次のZまでの距離」そのものではなく、押し出した樹脂線の厚みを表す設計値です。初期設計はノズル径の0.50倍です。</p>'},
  printSpeed:{title:'造形速度',body:'<p>フィラメントを押し出しながらXYZを動かすG1の速度です。画面ではmm/sで指定し、G-codeではF=mm/minへ自動換算します。</p><p>例：20 mm/s → F1200。</p>'},
  travelSpeed:{title:'移動速度',body:'<p>フィラメントを押し出さずにXYZを動かすG0/G1の速度です。一括反映では非造形移動のFをこの値へ変更します。</p><p>Eだけを動かすパージやリトラクトは機構上重要なので、一括変更の対象外です。</p>'},
+ mvs:{title:'MVS（最大体積流量）',body:'<p><b>1秒間に、ホットエンドが安定して溶かして出せる樹脂の体積の上限</b>です。単位は mm³/s です。</p><p>必要流量は <b>Q=A×v</b> で、樹脂線の断面積Aが大きいほど、同じ速度vでも多くの樹脂が必要です。したがって理論上の速度上限は <b>v=MVS/A</b> です。</p><p>MVSは材料だけで完全には決まらず、温度・ホットエンド・ノズル径にも依存します。アプリの値はBambu Studio等のプロファイルを出発点にし、編集可能にしています。</p>'},
+ safety:{title:'安全率',body:'<p>MVSから計算した理論上限を、そのまま使わず少し下げる割合です。</p><p>75%なら <b>推奨速度 = 理論上限 × 0.75</b>。湿気、温度変化、曲がり角、冷却、非平面軌跡など、単純な数式に入っていない条件のための余裕です。</p>'},
  repair:{title:'自動修正・検査',body:'<p>単なる「再解析」ではなく、G-codeを安全側に整えてから表示を更新します。</p><p>G90、M82/M83、T0、G28、温度設定/待機、最後のM104 S0・M140 S0・ファンOFF・M84を検査し、足りない基本条件を補います。G1X10Y20のような基本的な詰め書きも整形します。</p><p><b>重要：</b>Bambu独自Mコードなど意味を断定できない命令は削除しません。自動修正後も実機印刷前に内容を確認してください。</p>'}
 };
 function showSettingHelp(key){const h=SETTING_HELP[key];if(!h)return;$("settingHelpTitle").textContent=h.title;$("settingHelpBody").innerHTML=h.body;$("settingHelpPanel").classList.add('show')}
@@ -1021,6 +1204,7 @@ $("helpModal").onclick=e=>{if(e.target===$("helpModal"))$("helpModal").classList
 // initial sample
 ta.value=SAMPLE_GCODE;
 reparse(false);saveHistory();
+updateDesignModel();
 requestAnimationFrame(()=>{resize();setView("iso")});
 </script>
 </body>
