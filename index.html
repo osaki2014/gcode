@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GcodeGcodeEditor</title>
+<title>GcodeEditor</title>
 <style>
 :root{
   --bg:#f5f5f3; --panel:#fff; --line:#d9d9d4; --text:#171717; --muted:#70706b;
@@ -68,12 +68,27 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
  #workspace{grid-template-columns:1fr;grid-template-rows:52% 48%}
  .brand small{display:none}
 }
+
+.helpDot{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;border-radius:50%;font-size:11px;font-weight:700;color:#286a50;border:1px solid #8bb7a5;background:#eff7f3;cursor:pointer;vertical-align:middle}
+.helpDot:hover{background:#dfeee7}
+#settingHelpPanel{position:fixed;z-index:30;inset:0;background:rgba(0,0,0,.30);display:none;align-items:center;justify-content:center}
+#settingHelpPanel.show{display:flex}
+#settingHelpCard{width:min(580px,92vw);max-height:82vh;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 60px rgba(0,0,0,.2);padding:18px}
+#settingHelpCard h3{margin:0 0 10px;font-size:18px}
+#settingHelpCard p{font-size:13px;line-height:1.7;color:#444;margin:7px 0}
+#repairPanel{position:fixed;z-index:31;right:18px;bottom:18px;width:min(520px,90vw);max-height:70vh;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 48px rgba(0,0,0,.22);padding:14px;display:none}
+#repairPanel.show{display:block}
+#repairPanel h3{font-size:15px;margin:0 0 8px}
+#repairPanel ul{padding-left:20px;margin:7px 0;font-size:12px;line-height:1.6;color:#444}
+#repairPanel .warnLine{color:#9a4f1e}
+#repairPanel .okLine{color:#236a4c}
+
 </style>
 </head>
 <body>
 <div id="app">
 <header>
-  <div class="brand">GcodeGcodeEditor <small>3D toolpath ↔ G-code ↔ Bambu 3MF</small></div>
+  <div class="brand">GcodeEditor <small>3D toolpath ↔ G-code ↔ Bambu 3MF</small></div>
   <div class="header-actions">
     <button id="newBtn">新規</button>
     <button id="openBtn">G-codeを開く</button>
@@ -102,12 +117,12 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
   <div class="separator"></div>
   <div class="field"><label>ノズル温度</label><input id="hotend" type="number" value="200"><span>℃</span></div>
   <div class="field"><label>ベッド</label><input id="bedtemp" type="number" value="60"><span>℃</span></div>
-  <div class="field"><label>造形速度</label><input id="printSpeed" type="number" value="1.67" step=".1"><span>mm/s</span></div>
-  <div class="field"><label>移動速度</label><input id="travelSpeed" type="number" value="83.3" step=".1"><span>mm/s</span></div>
-  <div class="field"><label>線幅</label><input id="lineWidth" type="number" value="0.8" step=".05"><span>mm</span></div>
-  <div class="field"><label>高さ</label><input id="layerHeight" type="number" value="0.4" step=".05"><span>mm</span></div>
-  <div class="field"><label>Flow</label><input id="flow" type="number" value="0.98" step=".01"></div>
-  <button id="applySettings">一括設定をG-codeへ反映</button>
+  <div class="field"><label>造形速度</label><button class="helpDot" data-help="printSpeed" title="造形速度とは？">?</button><input id="printSpeed" type="number" value="1.67" step=".1"><span>mm/s</span></div>
+  <div class="field"><label>移動速度</label><button class="helpDot" data-help="travelSpeed" title="移動速度とは？">?</button><input id="travelSpeed" type="number" value="83.3" step=".1"><span>mm/s</span></div>
+  <div class="field"><label>線幅</label><button class="helpDot" data-help="lineWidth" title="線幅とは？">?</button><input id="lineWidth" type="number" value="0.8" step=".05"><span>mm</span></div>
+  <div class="field"><label>高さ</label><button class="helpDot" data-help="layerHeight" title="高さとは？">?</button><input id="layerHeight" type="number" value="0.4" step=".05"><span>mm</span></div>
+  <div class="field"><label>Flow</label><button class="helpDot" data-help="flow" title="Flowとは？">?</button><input id="flow" type="number" value="0.98" step=".01"></div>
+  <button id="applySettings" class="primary">一括反映（温度・全速度）</button>
 </div>
 
 <div id="workspace">
@@ -121,7 +136,7 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
       <button id="deleteSeg" class="danger">選択線を削除</button>
       <span class="spacer"></span>
       <span class="field"><label>Z</label><input id="drawZ" type="number" value="0.5" step=".1" style="width:65px"><span>mm</span></span>
-      <span class="field"><label>Snap</label><select id="snap"><option value="0">OFF</option><option value=".1">0.1</option><option value=".5">0.5</option><option value="1" selected>1</option><option value="5">5</option></select></span>
+      <span class="field"><label>Snap</label><button class="helpDot" data-help="snap" title="Snapとは？">?</button><select id="snap"><option value="0">OFF</option><option value=".1">0.1</option><option value=".5">0.5</option><option value="1" selected>1</option><option value="5">5</option></select></span>
       <button class="viewBtn" data-view="iso">ISO</button>
       <button class="viewBtn" data-view="top">上</button>
       <button class="viewBtn" data-view="front">前</button>
@@ -145,7 +160,7 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
       <span id="parseStat" class="badge ok">解析OK</span>
       <span class="spacer"></span>
       <button id="gcodeHelpBtn">記号ヘルプ</button>
-      <button id="formatBtn">再解析</button>
+      <button id="formatBtn">自動修正・検査</button><button class="helpDot" data-help="repair" title="自動修正・検査とは？">?</button>
       <button id="copyBtn">コピー</button>
     </div>
     <div id="editorWrap">
@@ -182,17 +197,31 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
 </div>
 </div>
 
+
+<div id="settingHelpPanel">
+ <div id="settingHelpCard">
+  <h3 id="settingHelpTitle">ヘルプ</h3>
+  <div id="settingHelpBody"></div>
+  <div style="text-align:right;margin-top:12px"><button id="settingHelpClose" class="primary">閉じる</button></div>
+ </div>
+</div>
+<div id="repairPanel">
+ <button id="repairClose" class="closeHelpMini" title="閉じる">×</button>
+ <h3>自動修正・検査レポート</h3>
+ <div id="repairSummary"></div>
+</div>
+
 <input id="fileInput" type="file" accept=".gcode,.txt" hidden>
 
 <div id="helpModal" class="modal">
 <div class="dialog">
-  <h2>GcodeGcodeEditor</h2>
+  <h2>GcodeEditor</h2>
   <p>左の3D図面と右のG-codeが連動します。今回のA1 mini用非平面G-codeを初期データとして読み込んでいます。</p>
   <ul>
     <li><b>選択</b>: 3D上の線をクリックすると強調され、対応するG-code行も右画面で横一列強調表示されます。逆に右のG-code行へカーソルを置くと対応線を選択します。</li>
     <li><b>記号ヘルプ</b>: テキスト画面の「記号ヘルプ」で G/M/S/X/Y/Z/E/F の意味を確認できます。さらに選択中の行の意味をテキスト画面下部に自動表示します。</li>
     <li><b>線画</b>: Z値を指定して3D画面をクリックします。最初の点へG0移動し、以降の点間をG1押出し線として追加します。</li>
-    <li><b>テキスト直接編集</b>: M104/M109/M140/M190、F値、XYZ/Eなどを直接変更できます。変更後は自動再解析します。</li>
+    <li><b>テキスト直接編集</b>: M104/M109/M140/M190、F値、XYZ/Eなどを直接変更できます。変更後は3D表示が自動更新されます。</li>
     <li><b>3MF出力</b>: Bambu Studioが前回正常に開いた方式と同じく、十分なCONFIG_BLOCK、T0初期化、サムネイル、slice_info、MD5を含む .gcode.3mf を生成します。</li>
   </ul>
   <p><b>安全:</b> カスタムG-codeはスライサーの衝突回避を通りません。出力前に造形範囲、開始位置、Z高さ、ノズル温度、送り速度を確認してください。</p>
@@ -597,17 +626,139 @@ $("material").addEventListener("change",()=>{
 
 function replaceFirstOrInsert(lines,re,value){
  const idx=lines.findIndex(l=>re.test(l.split(";")[0].trim()));
- if(idx>=0){lines[idx]=value;return}
- lines.unshift(value);
+ if(idx>=0){lines[idx]=value;return 1}
+ lines.unshift(value);return 1;
 }
-$("applySettings").onclick=()=>{
- saveHistory();let ls=ta.value.split(/\r?\n/),h=+$("hotend").value,b=+$("bedtemp").value;
- replaceFirstOrInsert(ls,/^M104\b/,`M104 S${fmt(h,0)}`);
- replaceFirstOrInsert(ls,/^M109\b/,`M109 S${fmt(h,0)}`);
- replaceFirstOrInsert(ls,/^M140\b/,`M140 S${fmt(b,0)}`);
- replaceFirstOrInsert(ls,/^M190\b/,`M190 S${fmt(b,0)}`);
+function replacePositiveTemperature(line,cmd,value){
+ const semi=line.indexOf(";"), code=semi>=0?line.slice(0,semi):line, comment=semi>=0?line.slice(semi):"";
+ if(!new RegExp(`^\\s*${cmd}\\b`,`i`).test(code))return {line,changed:false};
+ const m=code.match(/(?:^|\s)S(-?\d+(?:\.\d+)?)/i);
+ if(m && +m[1]===0)return {line,changed:false}; // preserve shutdown S0
+ let c=code;
+ if(m)c=c.replace(/(^|\s)S-?\d+(?:\.\d+)?/i,`$1S${fmt(value,0)}`);
+ else c=c.trimEnd()+` S${fmt(value,0)}`;
+ return {line:c+(comment?" "+comment:""),changed:true};
+}
+function applyAllSettings(){
+ saveHistory();
+ let ls=ta.value.split(/\r?\n/), h=+$("hotend").value, b=+$("bedtemp").value;
+ const pf=Math.max(1,Math.round((+$("printSpeed").value||1)*60));
+ const tf=Math.max(1,Math.round((+$("travelSpeed").value||1)*60));
+ let tempChanges=0,speedChanges=0;
+ let absE=true,e=0;
+ const configValues={
+   nozzle_temperature:h,nozzle_temperature_initial_layer:h,textured_plate_temp:b,textured_plate_temp_initial_layer:b,
+   line_width:+$("lineWidth").value,initial_layer_line_width:+$("lineWidth").value,outer_wall_line_width:+$("lineWidth").value,
+   inner_wall_line_width:+$("lineWidth").value,layer_height:+$("layerHeight").value,initial_layer_print_height:+$("layerHeight").value,
+   filament_flow_ratio:+$("flow").value
+ };
+ for(let i=0;i<ls.length;i++){
+   let raw=ls[i], code=raw.split(";")[0].trim();
+   for(const [cmd,val] of [["M104",h],["M109",h],["M140",b],["M190",b]]){
+     const rr=replacePositiveTemperature(raw,cmd,val); if(rr.changed){raw=rr.line;tempChanges++;}
+   }
+   code=raw.split(";")[0].trim();
+   if(code==="M82")absE=true; else if(code==="M83")absE=false;
+   if(/^G92\b/i.test(code)){const m=code.match(/(?:^|\s)E(-?\d+(?:\.\d+)?)/i);if(m)e=+m[1]}
+   if(/^G0?1\b/i.test(code)){
+     const hasXYZ=/(?:^|\s)[XYZ]-?\d/i.test(code);
+     const em=code.match(/(?:^|\s)E(-?\d+(?:\.\d+)?)/i);
+     let extruding=false,ne=e;
+     if(em){ne=+em[1];const de=absE?ne-e:ne;extruding=de>1e-8;}
+     if(hasXYZ){
+       const targetF=extruding?pf:tf, semi=raw.indexOf(";"), comment=semi>=0?raw.slice(semi):"";
+       let c=(semi>=0?raw.slice(0,semi):raw).trimEnd();
+       if(/(?:^|\s)F-?\d+(?:\.\d+)?/i.test(c)) c=c.replace(/(^|\s)F-?\d+(?:\.\d+)?/i,`$1F${targetF}`);
+       else c+=` F${targetF}`;
+       raw=c+(comment?" "+comment:""); speedChanges++;
+     }
+     if(em && absE)e=ne;
+   }
+   raw=raw.replace(/^;\s*LINE_WIDTH:\s*.*$/i,`; LINE_WIDTH: ${$("lineWidth").value}`)
+          .replace(/^;\s*LAYER_HEIGHT:\s*.*$/i,`; LAYER_HEIGHT: ${$("layerHeight").value}`);
+   for(const [k,val] of Object.entries(configValues)){
+     const rx=new RegExp(`^;\\s*${k}\\s*=.*$`,'i');
+     if(rx.test(raw))raw=`; ${k} = ${val}`;
+   }
+   ls[i]=raw;
+ }
+ if(!ls.some(l=>/^\s*M104\b/i.test(l.split(";")[0])))ls.unshift(`M104 S${fmt(h,0)}`);
+ if(!ls.some(l=>/^\s*M140\b/i.test(l.split(";")[0])))ls.unshift(`M140 S${fmt(b,0)}`);
  ta.value=ls.join("\n");reparse(false);saveHistory();
-};
+ showRepairReport([
+   `温度設定を ${tempChanges} 箇所更新しました。`,
+   `XYZ移動の速度Fを ${speedChanges} 行更新しました。`,
+   `造形速度=${fmt(pf/60,2)} mm/s、移動速度=${fmt(tf/60,2)} mm/s。`,
+   `Eだけのパージ/リトラクト速度は変更していません。`
+ ],[],'一括設定を反映しました');
+}
+$("applySettings").onclick=applyAllSettings;
+
+function normalizeKnownLine(raw){
+ const semi=raw.indexOf(";"),code0=(semi>=0?raw.slice(0,semi):raw).trim(),comment=semi>=0?raw.slice(semi):"";
+ if(!code0)return raw;
+ let code=code0.replace(/[　\t]+/g," ");
+ if(/^[GMT]\d/i.test(code) && !/^M1002\b/i.test(code)){
+   code=code.replace(/^([gmt])(\d+(?:\.\d+)?)/i,(_,a,b)=>a.toUpperCase()+b);
+   code=code.replace(/([xyzefs])(?=-?\d)/gi," $1").replace(/\s+/g," ").trim();
+   code=code.replace(/(^|\s)([xyzefs])(?=-?\d)/gi,(m,p,a)=>p+a.toUpperCase());
+ }
+ return code+(comment?" "+comment:"");
+}
+function commandBefore(lines,re,limit){for(let i=0;i<Math.min(limit,lines.length);i++)if(re.test(lines[i].split(";")[0].trim()))return true;return false}
+function lastMovementIndex(lines){for(let i=lines.length-1;i>=0;i--)if(/^G0?1\b/i.test(lines[i].split(";")[0].trim()))return i;return -1}
+function autoRepairGcode(){
+ saveHistory();
+ let ls=ta.value.split(/\r?\n/).map(normalizeKnownLine), changes=[],warnings=[];
+ while(ls.length&&ls[0].trim()==="")ls.shift(); while(ls.length&&ls[ls.length-1].trim()==="")ls.pop();
+ let firstMove=ls.findIndex(l=>/^G0?1\b/i.test(l.split(";")[0].trim())); if(firstMove<0)firstMove=ls.length;
+ const starters=[];
+ if(!commandBefore(ls,/^G90\b/i,firstMove)){starters.push('G90 ; GcodeEditor: XYZ absolute mode');changes.push('開始条件 G90 を追加');}
+ if(!commandBefore(ls,/^M8[23]\b/i,firstMove)){starters.push('M82 ; GcodeEditor: E absolute mode');changes.push('開始条件 M82 を追加');}
+ if(!commandBefore(ls,/^T0\b/i,firstMove)){starters.push('T0 ; GcodeEditor: select tool');changes.push('開始条件 T0 を追加');}
+ if(!commandBefore(ls,/^G28\b/i,firstMove)){starters.push('G28 ; GcodeEditor: home axes');changes.push('開始条件 G28 を追加');}
+ const h=+$("hotend").value,b=+$("bedtemp").value;
+ if(!ls.some(l=>/^M10[49]\b/i.test(l.split(";")[0].trim())&&!/\bS0(?:\s|$)/i.test(l))){starters.push(`M104 S${fmt(h,0)}`);changes.push('ノズル温度設定を追加');}
+ if(!ls.some(l=>/^M1(?:40|90)\b/i.test(l.split(";")[0].trim())&&!/\bS0(?:\s|$)/i.test(l))){starters.push(`M140 S${fmt(b,0)}`);changes.push('ベッド温度設定を追加');}
+ if(!ls.some(l=>/^M109\b/i.test(l.split(";")[0].trim())&&!/\bS0(?:\s|$)/i.test(l))){starters.push(`M109 S${fmt(h,0)} ; GcodeEditor: wait for nozzle`);changes.push('M109 温度待機を追加');}
+ if(!ls.some(l=>/^M190\b/i.test(l.split(";")[0].trim())&&!/\bS0(?:\s|$)/i.test(l))){starters.push(`M190 S${fmt(b,0)} ; GcodeEditor: wait for bed`);changes.push('M190 ベッド温度待機を追加');}
+ if(starters.length)ls.splice(firstMove,0,...starters);
+ let absE=true,e=0,firstExt=-1,t0=-1;
+ for(let i=0;i<ls.length;i++){
+   const c=ls[i].split(';')[0].trim();if(/^T0\b/i.test(c)&&t0<0)t0=i;
+   if(c==='M82')absE=true;else if(c==='M83')absE=false;
+   else if(/^G92\b/i.test(c)){const m=c.match(/(?:^|\s)E(-?\d+(?:\.\d+)?)/i);if(m)e=+m[1]}
+   else if(/^G0?1\b/i.test(c)){const m=c.match(/(?:^|\s)E(-?\d+(?:\.\d+)?)/i);if(m){const ne=+m[1],de=absE?ne-e:ne;if(de>1e-8&&firstExt<0)firstExt=i;if(absE)e=ne}}
+ }
+ if(firstExt>=0&&(t0<0||t0>firstExt)){
+   ls=ls.filter(l=>!/^T0\b/i.test(l.split(';')[0].trim()));
+   firstExt=ls.findIndex(l=>/^G0?1\b/i.test(l.split(';')[0].trim())&&/(?:^|\s)E-?\d/i.test(l.split(';')[0]));
+   ls.splice(Math.max(0,firstExt),0,'T0 ; GcodeEditor: moved before extrusion');changes.push('T0 を最初の押出しより前へ移動');
+ }
+ ls.forEach((l,i)=>{
+   const c=l.split(';')[0].trim();
+   if(/^G0?1\b/i.test(c)){
+     const remainder=c.replace(/^G0?1\b/i,'').trim();
+     const cleaned=remainder.replace(/(?:^|\s)[XYZEF]-?\d+(?:\.\d+)?/gi,'').trim();
+     if(cleaned)warnings.push(`L${i+1}: G0/G1に解釈できない部分があります → ${cleaned}`);
+   }
+ });
+ const lm=lastMovementIndex(ls), tail=ls.slice(lm+1).map(l=>l.split(';')[0].trim()),end=[];
+ if(!tail.some(c=>/^M104\b/i.test(c)&&/\bS0(?:\s|$)/i.test(c))){end.push('M104 S0 ; GcodeEditor: hotend off');changes.push('終了条件 M104 S0 を末尾へ追加');}
+ if(!tail.some(c=>/^M140\b/i.test(c)&&/\bS0(?:\s|$)/i.test(c))){end.push('M140 S0 ; GcodeEditor: bed off');changes.push('終了条件 M140 S0 を末尾へ追加');}
+ if(!tail.some(c=>/^M106\b/i.test(c)&&/\bS0(?:\s|$)/i.test(c))&&!tail.some(c=>/^M107\b/i.test(c))){end.push('M106 S0 ; GcodeEditor: fan off');changes.push('終了条件 ファンOFFを末尾へ追加');}
+ if(!tail.some(c=>/^M84\b/i.test(c))){end.push('M84 ; GcodeEditor: motors off');changes.push('終了条件 M84 を末尾へ追加');}
+ if(end.length)ls.push('; --- GcodeEditor safe end ---',...end);
+ ta.value=ls.join('\n')+'\n';reparse(false);saveHistory();
+ if(!warnings.length)warnings.push('基本的なG0/G1数値表記には明らかな異常を検出しませんでした。');
+ showRepairReport(changes,warnings,'自動修正・検査が完了しました');
+}
+function showRepairReport(changes,warnings,title='レポート'){
+ const c=changes.length?`<div class="okLine"><b>${escapeHtml(title)}</b></div><ul>${changes.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ul>`:`<div class="okLine"><b>${escapeHtml(title)}</b><br>変更はありませんでした。</div>`;
+ const w=warnings.length?`<div class="warnLine"><b>確認事項</b></div><ul>${warnings.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ul>`:'';
+ $("repairSummary").innerHTML=c+w;$("repairPanel").classList.add('show');
+}
+$("repairClose").onclick=()=>$("repairPanel").classList.remove('show');
 
 $("newBtn").onclick=()=>{
  if(!confirm("現在の内容を新規G-codeに置き換えますか？"))return;
@@ -632,7 +783,7 @@ $("fileInput").onchange=async e=>{
  const r=parseGcode(ta.value);if(r.firstTemp!==null)$("hotend").value=r.firstTemp;if(r.firstBed!==null)$("bedtemp").value=r.firstBed;
  e.target.value="";
 };
-$("formatBtn").onclick=()=>reparse(false);
+$("formatBtn").onclick=autoRepairGcode;
 $("copyBtn").onclick=async()=>{await navigator.clipboard.writeText(ta.value);$("copyBtn").textContent="コピー済";setTimeout(()=>$("copyBtn").textContent="コピー",900)};
 $("saveGBtn").onclick=()=>downloadBlob(new Blob([ta.value],{type:"text/plain"}),"toolpath.gcode");
 
@@ -696,7 +847,7 @@ function makeConfigBlock(){
  ["filament_settings_id",`${mat.name} @BBL ${mach.code}`],["filament_type",mat.type],["filament_ids",mat.id],
  ["filament_colour","#FFFFFF"],["filament_diameter","1.75"],["filament_density",String(mat.density)],["filament_flow_ratio",String(flow)],
  ["filament_map","1"],["filament_is_support","0"],["filament_soluble","0"],["curr_bed_type","Textured PEI Plate"],
- ["print_settings_id","GcodeGcodeEditor custom"],["nozzle_temperature",String(h)],["nozzle_temperature_initial_layer",String(h)],
+ ["print_settings_id","GcodeEditor custom"],["nozzle_temperature",String(h)],["nozzle_temperature_initial_layer",String(h)],
  ["textured_plate_temp",String(b)],["textured_plate_temp_initial_layer",String(b)],["use_relative_e_distances","0"],
  ["layer_height",String(lh)],["initial_layer_print_height",String(lh)],["line_width",String(lw)],["initial_layer_line_width",String(lw)],
  ["initial_layer_infill_line_width",String(lw)],["inner_wall_line_width",String(lw)],["internal_solid_infill_line_width",String(lw)],
@@ -717,7 +868,7 @@ function normalizeForBambu(text){
  ls=stripBlock(ls,"; HEADER_BLOCK_START","; HEADER_BLOCK_END");
  ls=ls.filter(l=>!/^;\s*(generated by BambuStudio|BambuStudio )/.test(l));
 
- const head=["; HEADER_BLOCK_START","; BambuStudio 02.05.00.66","; generated by BambuStudio 02.05.00.66","; generated by GcodeGcodeEditor","; HEADER_BLOCK_END",...makeConfigBlock()];
+ const head=["; HEADER_BLOCK_START","; BambuStudio 02.05.00.66","; generated by BambuStudio 02.05.00.66","; generated by GcodeEditor","; HEADER_BLOCK_END",...makeConfigBlock()];
  ls=[...head,...ls];
 
  // Move a single T0 before first positive extrusion.
@@ -826,11 +977,11 @@ $("save3mfBtn").onclick=async()=>{
    const large=makeThumb(512),small=makeThumb(128);
    const ct=`<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="gcode" ContentType="text/x.gcode"/><Default Extension="json" ContentType="application/json"/><Default Extension="config" ContentType="application/octet-stream"/></Types>`;
    const rels=`<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/><Relationship Target="/Metadata/plate_1.png" Id="rel-2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail"/></Relationships>`;
-   const model=`<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021"><metadata name="Application">BambuStudio-02.05.00.66</metadata><metadata name="BambuStudio:3mfVersion">1</metadata><metadata name="Title">GcodeGcodeEditor toolpath</metadata><metadata name="Description">Custom G-code generated by GcodeGcodeEditor. Do not re-slice.</metadata><resources/><build/></model>`;
+   const model=`<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021"><metadata name="Application">BambuStudio-02.05.00.66</metadata><metadata name="BambuStudio:3mfVersion">1</metadata><metadata name="Title">GcodeEditor toolpath</metadata><metadata name="Description">Custom G-code generated by GcodeEditor. Do not re-slice.</metadata><resources/><build/></model>`;
    const modelrels=`<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/Metadata/plate_1.gcode" Id="rel-1" Type="http://schemas.bambulab.com/package/2021/gcode"/></Relationships>`;
-   const modelsettings=`<?xml version="1.0" encoding="UTF-8"?><config><plate><metadata key="plater_id" value="1"/><metadata key="plater_name" value="GcodeGcodeEditor"/><metadata key="locked" value="false"/><metadata key="filament_maps" value="1"/><metadata key="gcode_file" value="Metadata/plate_1.gcode"/><metadata key="thumbnail_file" value="Metadata/plate_1.png"/></plate></config>`;
-   const slice=`<?xml version="1.0" encoding="UTF-8"?><config><header><header_item key="X-BBL-Client-Type" value="slicer"/><header_item key="X-BBL-Client-Version" value="02.05.00.66"/></header><plate><metadata key="index" value="1"/><metadata key="printer_model_id" value="${mach.modelId}"/><metadata key="nozzle_diameters" value="${noz}"/><metadata key="prediction" value="${pred}"/><metadata key="weight" value="${grams.toFixed(2)}"/><metadata key="outside" value="false"/><object identify_id="1" name="GcodeGcodeEditor_path" skipped="false"/><filament id="1" tray_info_idx="${mat.id}" type="${mat.type}" color="#FFFFFF" used_m="${(r.totalExt/1000).toFixed(2)}" used_g="${grams.toFixed(2)}" used_for_object="true" used_for_support="false" group_id="0" nozzle_diameter="${noz.toFixed(2)}" volume_type="Standard"/><nozzle id="0" extruder_id="1" nozzle_diameter="${noz}" volume_type="Standard"/></plate></config>`;
-   const plateJson=JSON.stringify({bbox_all:[minx,miny,maxx,maxy],bbox_objects:[{area:(maxx-minx)*(maxy-miny),bbox:[minx,miny,maxx,maxy],id:1,layer_height:+$("layerHeight").value,name:"GcodeGcodeEditor_path"}],bed_type:"textured_plate",filament_colors:["#FFFFFF"],filament_ids:[1],first_extruder:0,is_seq_print:false,nozzle_diameter:noz,version:2});
+   const modelsettings=`<?xml version="1.0" encoding="UTF-8"?><config><plate><metadata key="plater_id" value="1"/><metadata key="plater_name" value="GcodeEditor"/><metadata key="locked" value="false"/><metadata key="filament_maps" value="1"/><metadata key="gcode_file" value="Metadata/plate_1.gcode"/><metadata key="thumbnail_file" value="Metadata/plate_1.png"/></plate></config>`;
+   const slice=`<?xml version="1.0" encoding="UTF-8"?><config><header><header_item key="X-BBL-Client-Type" value="slicer"/><header_item key="X-BBL-Client-Version" value="02.05.00.66"/></header><plate><metadata key="index" value="1"/><metadata key="printer_model_id" value="${mach.modelId}"/><metadata key="nozzle_diameters" value="${noz}"/><metadata key="prediction" value="${pred}"/><metadata key="weight" value="${grams.toFixed(2)}"/><metadata key="outside" value="false"/><object identify_id="1" name="GcodeEditor_path" skipped="false"/><filament id="1" tray_info_idx="${mat.id}" type="${mat.type}" color="#FFFFFF" used_m="${(r.totalExt/1000).toFixed(2)}" used_g="${grams.toFixed(2)}" used_for_object="true" used_for_support="false" group_id="0" nozzle_diameter="${noz.toFixed(2)}" volume_type="Standard"/><nozzle id="0" extruder_id="1" nozzle_diameter="${noz}" volume_type="Standard"/></plate></config>`;
+   const plateJson=JSON.stringify({bbox_all:[minx,miny,maxx,maxy],bbox_objects:[{area:(maxx-minx)*(maxy-miny),bbox:[minx,miny,maxx,maxy],id:1,layer_height:+$("layerHeight").value,name:"GcodeEditor_path"}],bed_type:"textured_plate",filament_colors:["#FFFFFF"],filament_ids:[1],first_extruder:0,is_seq_print:false,nozzle_diameter:noz,version:2});
    const entries=[
      ["[Content_Types].xml",ct],["Metadata/plate_1.png",large],["Metadata/plate_1_small.png",small],["Metadata/bbl_thumbnail.png",large],
      ["Metadata/plate_1.json",plateJson],["3D/3dmodel.model",model],["Metadata/project_settings.config",buildProjectSettings()],
@@ -840,11 +991,26 @@ $("save3mfBtn").onclick=async()=>{
      ["Auxiliaries/.thumbnails/thumbnail_small.png",small],["Auxiliaries/.thumbnails/thumbnail_middle.png",large],
      ["Auxiliaries/.thumbnails/thumbnail_3mf.png",large],["_rels/.rels",rels]
    ];
-   const zip=zipStore(entries),name=`GcodeGcodeEditor_${mach.code}_${noz}mm_${mat.type}.gcode.3mf`;
+   const zip=zipStore(entries),name=`GcodeEditor_${mach.code}_${noz}mm_${mat.type}.gcode.3mf`;
    downloadBlob(new Blob([zip],{type:"application/vnd.ms-package.3dmanufacturing-3dmodel+xml"}),name);
  }catch(err){console.error(err);alert("3MF生成中にエラー: "+err.message)}
  finally{$("save3mfBtn").disabled=false;$("save3mfBtn").textContent="3MF出力"}
 };
+
+
+const SETTING_HELP={
+ snap:{title:'Snap（スナップ）',body:'<p>線画で点を置くとき、座標を一定の刻みに吸着させる機能です。</p><p><b>Snap 1</b>なら X/Y/Z が1 mm刻み、<b>0.5</b>なら0.5 mm刻みに丸められます。<b>OFF</b>ではクリック位置をそのまま使います。</p><p>正確な格子状の図形を描くときは1 mmや0.5 mm、自由な曲線に近い折れ線を作るときは0.1 mmやOFFが便利です。</p>'},
+ flow:{title:'Flow（押出し倍率）',body:'<p>線画から新しいG1を作るときの<b>フィラメント押出し量Eの倍率</b>です。</p><p>1.00＝計算量の100%、0.98＝98%、1.05＝105%です。線幅×高さ×線の長さから求めた理論押出量にFlowを掛けます。</p><p>既存G-codeのE値を勝手に変更すると造形が大きく変わるため、一括反映では既存Eは変更しません。</p>'},
+ lineWidth:{title:'線幅',body:'<p>ノズルが置いていく<b>1本の樹脂線（ビード）の想定幅</b>です。0.8 mmノズルなら0.8〜0.82 mm程度を基準にできます。</p><p>GcodeEditorでは新しく線を描く際のE量計算と、Bambu Studio用3MFのプレビュー情報に使います。</p>'},
+ layerHeight:{title:'高さ',body:'<p>1本の樹脂線の<b>想定断面高さ</b>です。通常積層ではレイヤー高さに相当します。</p><p>このアプリは非平面軌跡も扱うため、Z座標の増分そのものではありません。E量を計算するための「樹脂線の厚み」と考えてください。</p>'},
+ printSpeed:{title:'造形速度',body:'<p>フィラメントを押し出しながらXYZを動かすG1の速度です。画面ではmm/sで指定し、G-codeではF=mm/minへ自動換算します。</p><p>例：20 mm/s → F1200。</p>'},
+ travelSpeed:{title:'移動速度',body:'<p>フィラメントを押し出さずにXYZを動かすG0/G1の速度です。一括反映では非造形移動のFをこの値へ変更します。</p><p>Eだけを動かすパージやリトラクトは機構上重要なので、一括変更の対象外です。</p>'},
+ repair:{title:'自動修正・検査',body:'<p>単なる「再解析」ではなく、G-codeを安全側に整えてから表示を更新します。</p><p>G90、M82/M83、T0、G28、温度設定/待機、最後のM104 S0・M140 S0・ファンOFF・M84を検査し、足りない基本条件を補います。G1X10Y20のような基本的な詰め書きも整形します。</p><p><b>重要：</b>Bambu独自Mコードなど意味を断定できない命令は削除しません。自動修正後も実機印刷前に内容を確認してください。</p>'}
+};
+function showSettingHelp(key){const h=SETTING_HELP[key];if(!h)return;$("settingHelpTitle").textContent=h.title;$("settingHelpBody").innerHTML=h.body;$("settingHelpPanel").classList.add('show')}
+document.querySelectorAll('.helpDot[data-help]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();showSettingHelp(b.dataset.help)}));
+$("settingHelpClose").onclick=()=>$("settingHelpPanel").classList.remove('show');
+$("settingHelpPanel").onclick=e=>{if(e.target===$("settingHelpPanel"))$("settingHelpPanel").classList.remove('show')};
 
 $("gcodeHelpBtn").onclick=()=>$("gcodeHelpPanel").classList.toggle("show");
 $("closeGcodeHelp").onclick=()=>$("gcodeHelpPanel").classList.remove("show");
