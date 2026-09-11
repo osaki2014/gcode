@@ -159,6 +159,7 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
   <span class="metric"><small>推奨造形速度</small><b id="recSpeedModel">—</b></span>
   <span class="metric"><small>E / 100 mm</small><b id="recE100">—</b></span>
   <span class="metric"><small>現在の流量</small><b id="currentQ">—</b></span>
+  <button id="tempSafetyBadge" class="badge ok" data-help="temperatureSafety" style="border:0;cursor:pointer">温度G-code OK</button>
   <button id="applyDesignBtn">推奨値を入力欄へ</button>
   <button id="modelHelpBtn" class="primary">考え方・数式・文献</button>
 </div>
@@ -334,7 +335,7 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
     <li><b>テキスト直接編集</b>: M104/M109/M140/M190、F値、XYZ/Eなどを直接変更できます。変更後は3D表示が自動更新されます。</li>
     <li><b>3MF出力</b>: Bambu Studioが前回正常に開いた方式と同じく、十分なCONFIG_BLOCK、T0初期化、サムネイル、slice_info、MD5を含む .gcode.3mf を生成します。</li>
   </ul>
-  <p><b>材料・ノズル設計:</b> 上部の緑色バーで、MVSと樹脂線断面から推奨造形速度、E/100 mmを自動計算できます。「考え方・数式・文献」で小学5年生向け説明と厳密な式を確認できます。</p><p><b>安全:</b> カスタムG-codeはスライサーの衝突回避を通りません。出力前に造形範囲、開始位置、Z高さ、ノズル温度、送り速度を確認してください。</p>
+  <p><b>材料・ノズル設計:</b> 上部の緑色バーで、MVSと樹脂線断面から推奨造形速度、E/100 mmを自動計算できます。「考え方・数式・文献」で小学5年生向け説明と厳密な式を確認できます。</p><p><b>温度安全検査:</b> 3MF出力時に M104/M109/M140/M190 を自動検査します。不自然に低い温度が造形前・造形中にあれば修復し、最初の押出し前のM109待機も確認します。</p><p><b>安全:</b> カスタムG-codeはスライサーの衝突回避を通りません。出力前に造形範囲、開始位置、Z高さ、ノズル温度、送り速度を確認してください。</p>
   <button id="closeHelp" class="primary">閉じる</button>
 </div>
 </div>
@@ -353,11 +354,11 @@ const MACHINES = {
   p1s:{name:"Bambu Lab P1S", modelId:"C12", bed:[256,256,256], code:"X1C", travelRec:150}
 };
 const MATERIALS = {
-  pla_basic:{name:"Bambu PLA Basic", type:"PLA", id:"GFA00", nozzle:220, bed:65, density:1.26, flow:.98, mvs:21, source:"Bambu公式プロファイル"},
-  generic_pla:{name:"Generic PLA", type:"PLA", id:"GFL99", nozzle:220, bed:65, density:1.24, flow:.98, mvs:12, source:"Bambu Generic PLA系の保守値"},
-  petg_hf:{name:"Bambu PETG HF", type:"PETG", id:"GFG02", nozzle:240, bed:70, density:1.28, flow:.94, mvs:18, source:"Bambu A1 mini PETG HFプロファイル"},
-  generic_petg:{name:"Generic PETG", type:"PETG", id:"GFG99", nozzle:255, bed:70, density:1.25, flow:.95, mvs:12, source:"Bambu Generic PETGプロファイル"},
-  tpu95:{name:"Bambu TPU 95A", type:"TPU", id:"GFU01", nozzle:230, bed:30, density:1.22, flow:1.00, mvs:3.6, source:"Bambu A1 mini TPU 95Aプロファイル"}
+  pla_basic:{name:"Bambu PLA Basic", type:"PLA", id:"GFA00", nozzle:220, bed:65, density:1.26, flow:.98, mvs:21, hotendRange:[180,250], bedRange:[20,100], source:"Bambu公式プロファイル"},
+  generic_pla:{name:"Generic PLA", type:"PLA", id:"GFL99", nozzle:220, bed:65, density:1.24, flow:.98, mvs:12, hotendRange:[180,250], bedRange:[20,100], source:"Bambu Generic PLA系の保守値"},
+  petg_hf:{name:"Bambu PETG HF", type:"PETG", id:"GFG02", nozzle:240, bed:70, density:1.28, flow:.94, mvs:18, hotendRange:[220,280], bedRange:[20,110], source:"Bambu A1 mini PETG HFプロファイル"},
+  generic_petg:{name:"Generic PETG", type:"PETG", id:"GFG99", nozzle:255, bed:70, density:1.25, flow:.95, mvs:12, hotendRange:[220,280], bedRange:[20,110], source:"Bambu Generic PETGプロファイル"},
+  tpu95:{name:"Bambu TPU 95A", type:"TPU", id:"GFU01", nozzle:230, bed:30, density:1.22, flow:1.00, mvs:3.6, hotendRange:[190,260], bedRange:[0,80], source:"Bambu A1 mini TPU 95Aプロファイル"}
 };
 
 let state={
@@ -377,7 +378,13 @@ function len(a){return Math.hypot(a.x,a.y,a.z)}
 function norm(a){const l=len(a)||1;return mul(a,1/l)}
 function dist3(a,b){return len(sub(a,b))}
 function clamp(x,a,b){return Math.max(a,Math.min(b,x))}
-function fmt(n,d=3){return Number(n).toFixed(d).replace(/\.?0+$/,"")}
+function fmt(n,d=3){
+ const num=Number(n);
+ if(!Number.isFinite(num))return String(n);
+ if(d===0)return String(Math.round(num));
+ const s=num.toFixed(d);
+ return s.replace(/(\.\d*?[1-9])0+$/,"$1").replace(/\.0+$/,"");
+}
 
 function beadArea(width,height){
  width=+width;height=+height;
@@ -631,7 +638,7 @@ function scheduleParse(){clearTimeout(parseTimer);parseTimer=setTimeout(()=>repa
 function updateLineNums(n){
  let s="";for(let i=1;i<=n;i++)s+=i+"\n";nums.textContent=s;
 }
-ta.addEventListener("input",()=>{updateTextLineUI();scheduleParse()});
+ta.addEventListener("input",()=>{updateTextLineUI();updateTemperatureBadge();scheduleParse()});
 ta.addEventListener("scroll",()=>{nums.scrollTop=ta.scrollTop;updateTextLineUI()});
 ta.addEventListener("click",selectFromCaret);
 ta.addEventListener("keyup",e=>{if(!["ArrowUp","ArrowDown","PageUp","PageDown","Home","End"].includes(e.key))return;selectFromCaret()});
@@ -795,7 +802,7 @@ function setView(name){
 }
 document.querySelectorAll(".viewBtn").forEach(b=>b.onclick=()=>setView(b.dataset.view));
 
-$("material").addEventListener("change",()=>{syncMaterialModelDefaults();reparse(false)});
+$("material").addEventListener("change",()=>{syncMaterialModelDefaults();updateTemperatureBadge();reparse(false)});
 $("machine").addEventListener("change",()=>{state.selected=-1;updateDesignModel();reparse(false)});
 $("nozzle").addEventListener("change",()=>{state.selected=-1;updateDesignModel();reparse(false)});
 $("designBasis").addEventListener("change",updateDesignModel);
@@ -816,10 +823,102 @@ function replacePositiveTemperature(line,cmd,value){
  const m=code.match(/(?:^|\s)S(-?\d+(?:\.\d+)?)/i);
  if(m && +m[1]===0)return {line,changed:false}; // preserve shutdown S0
  let c=code;
- if(m)c=c.replace(/(^|\s)S-?\d+(?:\.\d+)?/i,`$1S${fmt(value,0)}`);
- else c=c.trimEnd()+` S${fmt(value,0)}`;
+ if(m)c=c.replace(/(^|\s)S-?\d+(?:\.\d+)?/i,`$1S${Math.round(value)}`);
+ else c=c.trimEnd()+` S${Math.round(value)}`;
  return {line:c+(comment?" "+comment:""),changed:true};
 }
+
+function materialSafety(){
+ const mat=MATERIALS[$("material").value];
+ return{hotMin:mat.hotendRange?.[0]??150,hotMax:mat.hotendRange?.[1]??300,bedMin:mat.bedRange?.[0]??0,bedMax:mat.bedRange?.[1]??120};
+}
+function findExtrusionRange(lines){
+ let absE=true,e=0,first=-1,last=-1;
+ for(let i=0;i<lines.length;i++){
+   const c=lines[i].split(";")[0].trim();
+   if(c==="M82")absE=true;
+   else if(c==="M83")absE=false;
+   else if(/^G92\b/i.test(c)){const m=c.match(/(?:^|\s)E(-?\d+(?:\.\d+)?)/i);if(m)e=+m[1];}
+   else if(/^G0?1\b/i.test(c)){
+     const m=c.match(/(?:^|\s)E(-?\d+(?:\.\d+)?)/i);
+     if(m){const ne=+m[1],de=absE?ne-e:ne;if(de>1e-8){if(first<0)first=i;last=i;}if(absE)e=ne;}
+   }
+ }
+ return{first,last};
+}
+function setSValue(raw,value){
+ const semi=raw.indexOf(";"),code=semi>=0?raw.slice(0,semi):raw,comment=semi>=0?raw.slice(semi):"";
+ let c=code;
+ if(/(?:^|\s)S-?\d+(?:\.\d+)?/i.test(c))c=c.replace(/(^|\s)S-?\d+(?:\.\d+)?/i,`$1S${Math.round(value)}`);
+ else c=c.trimEnd()+` S${Math.round(value)}`;
+ return c+(comment?" "+comment:"");
+}
+function temperatureSafetyPass(input,{fix=true}={}){
+ let ls=input.split(/\r?\n/);
+ const mat=MATERIALS[$("material").value],safe=materialSafety();
+ const targetHot=+$("hotend").value,targetBed=+$("bedtemp").value;
+ const changes=[],errors=[],warnings=[];
+ if(!(targetHot>=safe.hotMin&&targetHot<=safe.hotMax))errors.push(`ノズル温度入力 ${targetHot}℃ は ${mat.name} の検査範囲 ${safe.hotMin}–${safe.hotMax}℃ 外です。`);
+ if(!(targetBed===0||(targetBed>=safe.bedMin&&targetBed<=safe.bedMax)))errors.push(`ベッド温度入力 ${targetBed}℃ は検査範囲 ${safe.bedMin}–${safe.bedMax}℃ 外です。`);
+ const er=findExtrusionRange(ls),activeEnd=er.last>=0?er.last:ls.length-1;
+ for(let i=0;i<=activeEnd;i++){
+   let c=ls[i].split(";")[0].trim();
+   let m=c.match(/^M(104|109)\b.*?(?:^|\s)S(-?\d+(?:\.\d+)?)/i);
+   if(m){
+     const val=+m[2];
+     if(val<safe.hotMin||val>safe.hotMax){
+       if(fix&&targetHot>=safe.hotMin&&targetHot<=safe.hotMax){ls[i]=setSValue(ls[i],targetHot);changes.push(`L${i+1}: M${m[1]} S${val} → S${Math.round(targetHot)}（造形前/中の危険なノズル温度を修正）`);}
+       else errors.push(`L${i+1}: M${m[1]} S${val} は造形前/中の安全範囲外です。`);
+     }
+   }
+   c=ls[i].split(";")[0].trim();
+   m=c.match(/^M(140|190)\b.*?(?:^|\s)S(-?\d+(?:\.\d+)?)/i);
+   if(m&&targetBed>0){
+     const val=+m[2];
+     if(val<safe.bedMin||val>safe.bedMax){
+       if(fix&&targetBed>=safe.bedMin&&targetBed<=safe.bedMax){ls[i]=setSValue(ls[i],targetBed);changes.push(`L${i+1}: M${m[1]} S${val} → S${Math.round(targetBed)}（ベッド温度を修正）`);}
+       else errors.push(`L${i+1}: M${m[1]} S${val} は造形前/中の安全範囲外です。`);
+     }
+   }
+ }
+ let rr=findExtrusionRange(ls);
+ if(rr.first>=0){
+   let lastG28=-1;for(let i=0;i<rr.first;i++)if(/^G28\b/i.test(ls[i].split(";")[0].trim()))lastG28=i;
+   let validWait=-1;
+   for(let i=Math.max(0,lastG28+1);i<rr.first;i++){
+     const m=ls[i].split(";")[0].trim().match(/^M109\b.*?(?:^|\s)S(-?\d+(?:\.\d+)?)/i);
+     if(m&&+m[1]>=safe.hotMin&&+m[1]<=safe.hotMax)validWait=i;
+   }
+   if(validWait<0&&fix&&targetHot>=safe.hotMin&&targetHot<=safe.hotMax){
+     ls.splice(rr.first,0,`M109 S${Math.round(targetHot)} ; GcodeEditor safety: wait for nozzle before first extrusion`);
+     changes.push(`最初の押出し直前に M109 S${Math.round(targetHot)} を追加`);
+   }else if(validWait<0)errors.push("最初の押出し前に安全なM109温度待機がありません。");
+ }
+ const vr=findExtrusionRange(ls),verifyEnd=vr.last>=0?vr.last:ls.length-1;
+ for(let i=0;i<=verifyEnd;i++){
+   const m=ls[i].split(";")[0].trim().match(/^M(104|109)\b.*?(?:^|\s)S(-?\d+(?:\.\d+)?)/i);
+   if(m&&(+m[2]<safe.hotMin||+m[2]>safe.hotMax))errors.push(`L${i+1}: 修正後も M${m[1]} S${m[2]} が安全範囲外です。`);
+ }
+ return{text:ls.join("\n"),changes,errors,warnings,firstExtrusion:vr.first,lastExtrusion:vr.last};
+}
+function updateTemperatureBadge(){
+ const r=temperatureSafetyPass(ta.value,{fix:false}),b=$("tempSafetyBadge");
+ if(!b)return;
+ if(r.errors.length){b.textContent=`温度G-code 要修正 ${r.errors.length}`;b.className="badge warn";}
+ else{b.textContent="温度G-code OK";b.className="badge ok";}
+}
+function exportPreflight(){
+ const mat=MATERIALS[$("material").value],noz=+$("nozzle").value,w=+$("lineWidth").value,h=+$("layerHeight").value;
+ const notes=[],warnings=[],errors=[];
+ const tr=temperatureSafetyPass(ta.value,{fix:true});notes.push(...tr.changes);errors.push(...tr.errors);
+ if(w>noz*1.6)warnings.push(`線幅 ${w} mm はノズル径 ${noz} mm の1.6倍を超えています。0.4 mmノズルに0.8 mm線幅など、意図した太線か確認してください。`);
+ if(h>noz*.8)warnings.push(`高さ ${h} mm はノズル径 ${noz} mm の80%を超えています。`);
+ const A=beadArea(w,h),q=A*(+$("printSpeed").value||0),mvs=+$("mvs").value||mat.mvs;
+ if(q>mvs)errors.push(`現在の造形流量 ${fmt(q,2)} mm³/s が MVS ${fmt(mvs,2)} mm³/s を超えています。造形速度を下げてください。`);
+ else if(q>mvs*(+$("safety").value||75)/100)warnings.push(`現在の造形流量 ${fmt(q,2)} mm³/s は設定した安全率の推奨範囲を超えています。`);
+ return{text:tr.text,notes,warnings,errors};
+}
+
 function applyAllSettings(){
  saveHistory();
  let ls=ta.value.split(/\r?\n/), h=+$("hotend").value, b=+$("bedtemp").value;
@@ -863,15 +962,17 @@ function applyAllSettings(){
    }
    ls[i]=raw;
  }
- if(!ls.some(l=>/^\s*M104\b/i.test(l.split(";")[0])))ls.unshift(`M104 S${fmt(h,0)}`);
- if(!ls.some(l=>/^\s*M140\b/i.test(l.split(";")[0])))ls.unshift(`M140 S${fmt(b,0)}`);
- ta.value=ls.join("\n");reparse(false);saveHistory();
+ if(!ls.some(l=>/^\s*M104\b/i.test(l.split(";")[0])))ls.unshift(`M104 S${Math.round(h)}`);
+ if(!ls.some(l=>/^\s*M140\b/i.test(l.split(";")[0])))ls.unshift(`M140 S${Math.round(b)}`);
+ const tempPass=temperatureSafetyPass(ls.join("\n"),{fix:true});
+ ta.value=tempPass.text;reparse(false);saveHistory();updateTemperatureBadge();
  showRepairReport([
    `温度設定を ${tempChanges} 箇所更新しました。`,
    `XYZ移動の速度Fを ${speedChanges} 行更新しました。`,
    `造形速度=${fmt(pf/60,2)} mm/s、移動速度=${fmt(tf/60,2)} mm/s。`,
-   `Eだけのパージ/リトラクト速度は変更していません。`
- ],[],'一括設定を反映しました');
+   `Eだけのパージ/リトラクト速度は変更していません。`,
+   ...tempPass.changes
+ ],tempPass.errors,'一括設定を反映し、温度安全検査も実行しました');
 }
 $("applySettings").onclick=applyAllSettings;
 
@@ -930,8 +1031,11 @@ function autoRepairGcode(){
  if(!tail.some(c=>/^M106\b/i.test(c)&&/\bS0(?:\s|$)/i.test(c))&&!tail.some(c=>/^M107\b/i.test(c))){end.push('M106 S0 ; GcodeEditor: fan off');changes.push('終了条件 ファンOFFを末尾へ追加');}
  if(!tail.some(c=>/^M84\b/i.test(c))){end.push('M84 ; GcodeEditor: motors off');changes.push('終了条件 M84 を末尾へ追加');}
  if(end.length)ls.push('; --- GcodeEditor safe end ---',...end);
- ta.value=ls.join('\n')+'\n';reparse(false);saveHistory();
- if(!warnings.length)warnings.push('基本的なG0/G1数値表記には明らかな異常を検出しませんでした。');
+ const tempPass=temperatureSafetyPass(ls.join('\n')+'\n',{fix:true});
+ changes.push(...tempPass.changes);warnings.push(...tempPass.warnings);
+ if(tempPass.errors.length)warnings.push(...tempPass.errors.map(x=>"温度検査: "+x));
+ ta.value=tempPass.text+'\n';reparse(false);saveHistory();updateTemperatureBadge();
+ if(!warnings.length)warnings.push('基本的なG0/G1数値表記と温度条件に明らかな異常を検出しませんでした。');
  showRepairReport(changes,warnings,'自動修正・検査が完了しました');
 }
 function showRepairReport(changes,warnings,title='レポート'){
@@ -1149,7 +1253,17 @@ $("save3mfBtn").onclick=async()=>{
  try{
    $("save3mfBtn").disabled=true;$("save3mfBtn").textContent="3MF生成中…";
    const mach=MACHINES[$("machine").value],mat=MATERIALS[$("material").value],noz=+$("nozzle").value;
-   const gcode=normalizeForBambu(ta.value),gb=enc.encode(gcode),hash=md5(gb),r=parseGcode(gcode);
+   const pre=exportPreflight();
+   if(pre.errors.length){
+     showRepairReport(pre.notes,pre.errors,"3MF出力を停止しました：安全上のエラーがあります");
+     throw new Error(pre.errors.join("\n"));
+   }
+   if(pre.notes.length){ta.value=pre.text;reparse(false);saveHistory();updateTemperatureBadge();}
+   if(pre.warnings.length){
+     const ok=confirm("3MF出力前の確認:\n\n"+pre.warnings.map(x=>"・"+x).join("\n")+"\n\nこの条件で出力しますか？");
+     if(!ok)throw new Error("ユーザーが警告確認で3MF出力を中止しました。");
+   }
+   const gcode=normalizeForBambu(pre.text),gb=enc.encode(gcode),hash=md5(gb),r=parseGcode(gcode);
    const ext=r.segs.filter(s=>s.extrude);
    const minx=ext.length?Math.min(...ext.flatMap(s=>[s.a.x,s.b.x])):0,maxx=ext.length?Math.max(...ext.flatMap(s=>[s.a.x,s.b.x])):0;
    const miny=ext.length?Math.min(...ext.flatMap(s=>[s.a.y,s.b.y])):0,maxy=ext.length?Math.max(...ext.flatMap(s=>[s.a.y,s.b.y])):0;
@@ -1174,7 +1288,7 @@ $("save3mfBtn").onclick=async()=>{
    ];
    const zip=zipStore(entries),name=`GcodeEditor_${mach.code}_${noz}mm_${mat.type}.gcode.3mf`;
    downloadBlob(new Blob([zip],{type:"application/vnd.ms-package.3dmanufacturing-3dmodel+xml"}),name);
- }catch(err){console.error(err);alert("3MF生成中にエラー: "+err.message)}
+ }catch(err){console.error(err);if(!String(err.message).includes("ユーザーが警告確認"))alert("3MF生成を停止しました:\n"+err.message)}
  finally{$("save3mfBtn").disabled=false;$("save3mfBtn").textContent="3MF出力"}
 };
 
@@ -1188,9 +1302,11 @@ const SETTING_HELP={
  travelSpeed:{title:'移動速度',body:'<p>フィラメントを押し出さずにXYZを動かすG0/G1の速度です。一括反映では非造形移動のFをこの値へ変更します。</p><p>Eだけを動かすパージやリトラクトは機構上重要なので、一括変更の対象外です。</p>'},
  mvs:{title:'MVS（最大体積流量）',body:'<p><b>1秒間に、ホットエンドが安定して溶かして出せる樹脂の体積の上限</b>です。単位は mm³/s です。</p><p>必要流量は <b>Q=A×v</b> で、樹脂線の断面積Aが大きいほど、同じ速度vでも多くの樹脂が必要です。したがって理論上の速度上限は <b>v=MVS/A</b> です。</p><p>MVSは材料だけで完全には決まらず、温度・ホットエンド・ノズル径にも依存します。アプリの値はBambu Studio等のプロファイルを出発点にし、編集可能にしています。</p>'},
  safety:{title:'安全率',body:'<p>MVSから計算した理論上限を、そのまま使わず少し下げる割合です。</p><p>75%なら <b>推奨速度 = 理論上限 × 0.75</b>。湿気、温度変化、曲がり角、冷却、非平面軌跡など、単純な数式に入っていない条件のための余裕です。</p>'},
+ temperatureSafety:{title:'温度G-code安全検査',body:'<p>3MF出力前に、最初の押出しより前から最後の押出しまでの M104/M109（ノズル）と M140/M190（ベッド）を検査します。</p><p>たとえばPLAで <b>M109 S2</b> のような不自然に低い値を見つけたら、画面のノズル温度へ自動修正します。さらに最初の押出し前に安全なM109温度待機が無ければ追加します。</p><p>今回見つかった <b>200→2、60→6</b> の数値整形バグを、数値関数の修正と独立した安全検査の二重で防ぎます。</p>'},
  repair:{title:'自動修正・検査',body:'<p>単なる「再解析」ではなく、G-codeを安全側に整えてから表示を更新します。</p><p>G90、M82/M83、T0、G28、温度設定/待機、最後のM104 S0・M140 S0・ファンOFF・M84を検査し、足りない基本条件を補います。G1X10Y20のような基本的な詰め書きも整形します。</p><p><b>重要：</b>Bambu独自Mコードなど意味を断定できない命令は削除しません。自動修正後も実機印刷前に内容を確認してください。</p>'}
 };
 function showSettingHelp(key){const h=SETTING_HELP[key];if(!h)return;$("settingHelpTitle").textContent=h.title;$("settingHelpBody").innerHTML=h.body;$("settingHelpPanel").classList.add('show')}
+$("tempSafetyBadge")?.addEventListener("click",()=>showSettingHelp("temperatureSafety"));
 document.querySelectorAll('.helpDot[data-help]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();showSettingHelp(b.dataset.help)}));
 $("settingHelpClose").onclick=()=>$("settingHelpPanel").classList.remove('show');
 $("settingHelpPanel").onclick=e=>{if(e.target===$("settingHelpPanel"))$("settingHelpPanel").classList.remove('show')};
@@ -1204,7 +1320,7 @@ $("helpModal").onclick=e=>{if(e.target===$("helpModal"))$("helpModal").classList
 // initial sample
 ta.value=SAMPLE_GCODE;
 reparse(false);saveHistory();
-updateDesignModel();
+updateDesignModel();updateTemperatureBadge();
 requestAnimationFrame(()=>{resize();setView("iso")});
 </script>
 </body>
