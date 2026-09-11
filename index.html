@@ -154,7 +154,7 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
   <div class="field"><label>Flow</label><button class="helpDot" data-help="flow" title="Flowとは？">?</button><input id="flow" type="number" value="0.98" step=".01"></div>
   <div class="field"><label>MVS</label><button class="helpDot" data-help="mvs" title="MVSとは？">?</button><input id="mvs" type="number" value="21" step="0.5"><span>mm³/s</span></div>
   <div class="field"><label>安全率</label><button class="helpDot" data-help="safety" title="安全率とは？">?</button><input id="safety" type="number" value="75" min="20" max="100" step="5"><span>%</span></div>
-  <button id="applySettings" class="primary">一括反映（ノズル・E・温度・速度）</button>
+  <button id="applySettings" class="primary">一括反映＋自動検査（ノズル・E・温度・速度）</button>
 </div>
 
 <div id="designBar">
@@ -210,7 +210,7 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
       <span id="parseStat" class="badge ok">解析OK</span>
       <span class="spacer"></span>
       <button id="gcodeHelpBtn">記号ヘルプ</button>
-      <button id="formatBtn">自動修正・検査</button><button class="helpDot" data-help="repair" title="自動修正・検査とは？">?</button>
+      <button id="formatBtn">再検査・修正</button><button class="helpDot" data-help="repair" title="自動修正・検査とは？">?</button>
       <button id="copyBtn">コピー</button>
     </div>
     <div id="editorWrap">
@@ -782,7 +782,7 @@ function applyRecommendedDesign(){
    `線幅 ${fmt(rr.w,3)} mm、高さ ${fmt(rr.h,3)} mm。`,
    `MVS ${fmt(rr.mvs,1)} mm³/s、安全率 ${fmt(rr.safety*100,0)}% → 推奨造形速度 ${fmt(rr.vrec,2)} mm/s。`,
    `非造形移動速度は保守値 ${fmt(rr.travel,0)} mm/s を入力しました。`,
-   `まだG-code本体は変更していません。「一括反映（ノズル・E・温度・速度）」で線幅・高さに応じたE量変換、F値、温度をまとめて反映してください。`
+   `まだG-code本体は変更していません。「一括反映＋自動検査（ノズル・E・温度・速度）」で線幅・高さに応じたE量変換、F値、温度をまとめて反映してください。`
  ],[],"推奨設計値を入力欄へ設定しました");
 }
 
@@ -1348,7 +1348,12 @@ function applyAllSettings(){
    ...tempPass.changes
  ],[...pc.errors,...pc.warnings,...tempPass.errors],'一括設定：ノズル・E・温度・速度を理論モデルで整合させました');
 }
-$("applySettings").onclick=applyAllSettings;
+$("applySettings").onclick=()=>{
+ // One click must leave the G-code in the same final state as
+ // "apply settings" followed by "auto repair/check".
+ applyAllSettings();
+ autoRepairGcode();
+};
 
 function normalizeKnownLine(raw){
  const semi=raw.indexOf(";"),code0=(semi>=0?raw.slice(0,semi):raw).trim(),comment=semi>=0?raw.slice(semi):"";
@@ -1523,7 +1528,11 @@ function makeConfigBlock(){
 }
 
 function normalizeForBambu(text){
- let ls=text.split(/\r?\n/);
+ // Export is deterministic: manual "re-check" must not change the resulting 3MF
+ // merely because of spaces or trailing blank lines.
+ let ls=text.split(/\r?\n/).map(normalizeKnownLine);
+ while(ls.length && ls[0].trim()==="")ls.shift();
+ while(ls.length && ls[ls.length-1].trim()==="")ls.pop();
  // Remove existing embedded config/header blocks to avoid conflicts.
  const stripBlock=(arr,a,b)=>{
    let out=[],inside=false;for(const l of arr){if(l.trim()===a){inside=true;continue}if(l.trim()===b){inside=false;continue}if(!inside)out.push(l)}return out;
@@ -1556,7 +1565,10 @@ function normalizeForBambu(text){
    const at=idx>=0?idx:first+1;
    ls.splice(at,0,"; MACHINE_START_GCODE_END","; CHANGE_LAYER",`; LAYER_HEIGHT: ${$("layerHeight").value}`,`; LINE_WIDTH: ${$("lineWidth").value}`);
  }
- return ls.join("\n").replace(/\n{4,}/g,"\n\n\n")+"\n";
+ return ls.join("\n")
+   .replace(/[ \t]+$/gm,"")
+   .replace(/\n{3,}/g,"\n\n")
+   .replace(/\n+$/,"")+"\n";
 }
 
 // ---------- ZIP/3MF helpers ----------
@@ -1682,7 +1694,7 @@ const SETTING_HELP={
  mvs:{title:'MVS（最大体積流量）',body:'<p><b>1秒間に、実機が安定して溶かして出せる樹脂量の経験的上限</b>です。単位は mm³/s です。</p><p>v8ではMVSだけで速度を決めません。材料のpower-law粘度、温度、ノズル径から求める圧力側の上限Q_rheoと比較し、<b>Qmax=min(MVS,Q_rheo)</b>を使います。</p><p>MVSは熱が材料へ伝わる速さ、ギヤの押出能力、ホットエンド構造など複雑な要因を含むため、理論粘性モデルを補完する実機データとして残しています。</p>'},
  safety:{title:'安全率',body:'<p>MVSから計算した理論上限を、そのまま使わず少し下げる割合です。</p><p>75%なら <b>推奨速度 = 理論上限 × 0.75</b>。湿気、温度変化、曲がり角、冷却、非平面軌跡など、単純な数式に入っていない条件のための余裕です。</p>'},
  temperatureSafety:{title:'温度G-code安全検査',body:'<p>3MF出力前に、最初の押出しより前から最後の押出しまでの M104/M109（ノズル）と M140/M190（ベッド）を検査します。</p><p>たとえばPLAで <b>M109 S2</b> のような不自然に低い値を見つけたら、画面のノズル温度へ自動修正します。さらに最初の押出し前に安全なM109温度待機が無ければ追加します。</p><p>今回見つかった <b>200→2、60→6</b> の数値整形バグを、数値関数の修正と独立した安全検査の二重で防ぎます。</p>'},
- repair:{title:'自動修正・検査',body:'<p>単なる「再解析」ではなく、G-codeを安全側に整えてから表示を更新します。</p><p>G90、M82/M83、T0、G28、温度設定/待機、最後のM104 S0・M140 S0・ファンOFF・M84を検査します。さらに、選択ノズルと現在G-codeの線幅・高さが合わなければ、推奨断面へ変更し、各造形区間のEを断面積×Flow比で変換します。G1X10Y20のような基本的な詰め書きも整形します。</p><p><b>重要：</b>Bambu独自Mコードなど意味を断定できない命令は削除しません。自動修正後も実機印刷前に内容を確認してください。</p>'}
+ repair:{title:'再検査・修正',body:'<p>単なる「再解析」ではなく、G-codeを安全側に整えてから表示を更新します。</p><p>G90、M82/M83、T0、G28、温度設定/待機、最後のM104 S0・M140 S0・ファンOFF・M84を検査します。さらに、選択ノズルと現在G-codeの線幅・高さが合わなければ、推奨断面へ変更し、各造形区間のEを断面積×Flow比で変換します。G1X10Y20のような基本的な詰め書きも整形します。</p><p><b>重要：</b>Bambu独自Mコードなど意味を断定できない命令は削除しません。自動修正後も実機印刷前に内容を確認してください。</p>'}
 };
 function showSettingHelp(key){const h=SETTING_HELP[key];if(!h)return;$("settingHelpTitle").textContent=h.title;$("settingHelpBody").innerHTML=h.body;$("settingHelpPanel").classList.add('show')}
 $("tempSafetyBadge")?.addEventListener("click",()=>showSettingHelp("temperatureSafety"));
