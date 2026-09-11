@@ -113,6 +113,15 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
 .rheoSource a{color:#175a41;word-break:break-all}
 .rheoConfidence{display:inline-block;padding:2px 6px;border-radius:999px;background:#ecefe9;color:#4f5a52;font-size:10px}
 
+
+#estimateDetailBtn{padding:3px 7px;font-size:11px}
+.estimateGrid{display:grid;grid-template-columns:1.2fr 1fr;gap:8px 18px;font-size:12px}
+.estimateGrid .row{display:flex;justify-content:space-between;gap:16px;padding:5px 0;border-bottom:1px solid #ecece8}
+.estimateGrid .row b{font-variant-numeric:tabular-nums}
+.estInputs{display:grid;grid-template-columns:150px 1fr 70px;gap:7px 10px;align-items:center;font-size:12px;margin-top:12px}
+.estInputs input{width:100%}
+.estNote{margin-top:11px;padding:9px 11px;background:#f4f6f3;border:1px solid #dfe5df;border-radius:8px;font-size:11px;line-height:1.6;color:#4e5a52}
+
 </style>
 </head>
 <body>
@@ -241,12 +250,69 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
   <span>線分 <strong id="segCount">0</strong></span>
   <span>造形線 <strong id="extCount">0</strong></span>
   <span>範囲 <strong id="bounds">—</strong></span>
-  <span>フィラメント推定 <strong id="filament">—</strong></span>
-  <span>時間推定 <strong id="timeEst">—</strong></span>
+  <span>移動距離 <strong id="distanceEst">—</strong></span>
+  <span>フィラメント <strong id="filament">—</strong></span>
+  <span>重量 <strong id="filamentWeight">—</strong></span>
+  <span>加熱待ち <strong id="heatEst">—</strong></span>
+  <span>所要時間 <strong id="timeEst">—</strong></span>
+  <button id="estimateDetailBtn">見積詳細</button>
   <span id="safeBadge" class="badge ok">機体範囲内</span>
 </div>
 </div>
 
+
+
+<div id="estimateModal" class="modal">
+<div class="dialog" style="width:min(760px,94vw)">
+ <h2>所要時間・フィラメント見積</h2>
+ <div class="estimateGrid">
+  <div>
+   <div class="row"><span>機種 / 材料 / ノズル</span><b id="estProfile">—</b></div>
+   <div class="row"><span>全XYZ移動距離</span><b id="estDistance">—</b></div>
+   <div class="row"><span>造形移動距離</span><b id="estPrintDistance">—</b></div>
+   <div class="row"><span>非造形移動距離</span><b id="estTravelDistance">—</b></div>
+   <div class="row"><span>G0/G1軌跡時間（台形速度）</span><b id="estMotionTime">—</b></div>
+   <div class="row"><span>単純 距離÷F の時間</span><b id="estNaiveTime">—</b></div>
+   <div class="row"><span>加速 / 巡航 / 減速</span><b id="estPhases">—</b></div>
+   <div class="row"><span>速度ブロック / 三角形</span><b id="estBlockCount">—</b></div>
+   <div class="row"><span>平均実効移動速度</span><b id="estAvgSpeed">—</b></div>
+  </div>
+  <div>
+   <div class="row"><span>ヒーター待機時間</span><b id="estHeatTime">—</b></div>
+   <div class="row"><span>G28/G29準備時間</span><b id="estPrepTime">—</b></div>
+   <div class="row"><span>G4待機時間</span><b id="estDwellTime">—</b></div>
+   <div class="row"><span>推定合計時間</span><b id="estTotalTime">—</b></div>
+   <div class="row"><span>フィラメント長</span><b id="estFilLen">—</b></div>
+   <div class="row"><span>体積 / 重量</span><b id="estFilMass">—</b></div>
+  </div>
+ </div>
+ <h3 style="font-size:14px;margin:16px 0 7px">時間モデルの校正値</h3>
+ <div class="estInputs">
+   <b>開始温度</b><input id="estAmbient" type="number" step="1"><span>℃</span>
+   <b>ノズル加熱率</b><input id="estHotRate" type="number" step=".1"><span>℃/s</span>
+   <b>ベッド加熱率</b><input id="estBedRate" type="number" step=".05"><span>℃/s</span>
+   <b>G28ホーム時間</b><input id="estHomeSec" type="number" step="1"><span>s</span>
+   <b>G29レベリング時間</b><input id="estLevelSec" type="number" step="1"><span>s</span>
+   <b>造形加速度</b><input id="estPrintAccel" type="number" step="100"><span>mm/s²</span>
+   <b>移動加速度</b><input id="estTravelAccel" type="number" step="100"><span>mm/s²</span>
+   <b>Z最大加速度</b><input id="estZAccel" type="number" step="100"><span>mm/s²</span>
+   <b>XYジャーク</b><input id="estJerkXY" type="number" step=".5"><span>mm/s</span>
+   <b>Zジャーク</b><input id="estJerkZ" type="number" step=".5"><span>mm/s</span>
+ </div>
+ <div class="estNote">
+  G0/G1はF値を最高巡航速度として、各ブロックの加速度・入口速度・出口速度から台形速度プロファイルを計算します。
+  前後の線分の方向変化ではXY/Zジャーク上限からジャンクション速度を求め、後向き・前向きパスで「その距離内で減速/加速できる入口速度」へ制限します。
+  短い線分でF値まで到達できない場合は三角速度プロファイルになります。G-code中のM204 S/P/Tも以降の加速度に反映します。
+  M104/M140は加熱開始、M109/M190は温度待機として、ノズルとベッドは移動中にも並行して加熱されます。
+  A1 miniの初期値はBambu Studio公式機械プロファイルの加速度・ジャーク値を基準にしています。
+ </div>
+ <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+   <button id="resetEstimateBtn">機種既定値へ</button>
+   <button id="applyEstimateBtn" class="primary">見積へ適用</button>
+   <button id="closeEstimateBtn">閉じる</button>
+ </div>
+</div>
+</div>
 
 <div id="settingHelpPanel">
  <div id="settingHelpCard">
@@ -412,9 +478,20 @@ const canvas=$("view"), ctx=canvas.getContext("2d");
 const ta=$("gcode"), nums=$("lineNums"), lineHighlight=$("lineHighlight"), lineHelpBar=$("lineHelpBar");
 
 const MACHINES = {
-  a1mini:{name:"Bambu Lab A1 mini", modelId:"N1", bed:[180,180,180], code:"A1M", travelRec:100},
-  a1:{name:"Bambu Lab A1", modelId:"N2S", bed:[256,256,256], code:"A1", travelRec:120},
-  p1s:{name:"Bambu Lab P1S", modelId:"C12", bed:[256,256,256], code:"X1C", travelRec:150}
+  // Heater rates, homing times, and motion-planner defaults.
+  // A1-family acceleration/jerk values follow Bambu Studio's official machine profiles where available.
+  a1mini:{name:"Bambu Lab A1 mini", modelId:"N1", bed:[180,180,180], code:"A1M", travelRec:100,
+          estimate:{ambient:25,hotRate:3.0,bedRate:.55,hotCool:1.0,bedCool:.20,home:12,level:18,
+                    printAccel:20000,travelAccel:9000,zAccel:1500,eAccel:5000,
+                    jerkXY:9,jerkZ:5,jerkE:3,maxXY:500,maxZ:30,maxE:30}},
+  a1:{name:"Bambu Lab A1", modelId:"N2S", bed:[256,256,256], code:"A1", travelRec:120,
+      estimate:{ambient:25,hotRate:3.0,bedRate:.60,hotCool:1.0,bedCool:.20,home:14,level:20,
+                printAccel:20000,travelAccel:9000,zAccel:1500,eAccel:5000,
+                jerkXY:9,jerkZ:5,jerkE:3,maxXY:500,maxZ:30,maxE:30}},
+  p1s:{name:"Bambu Lab P1S", modelId:"C12", bed:[256,256,256], code:"X1C", travelRec:150,
+       estimate:{ambient:25,hotRate:2.8,bedRate:.55,hotCool:1.0,bedCool:.18,home:16,level:22,
+                 printAccel:20000,travelAccel:9000,zAccel:500,eAccel:5000,
+                 jerkXY:9,jerkZ:3,jerkE:2.5,maxXY:500,maxZ:20,maxE:30}}
 };
 const MATERIALS = {
   pla_basic:{
@@ -462,7 +539,8 @@ let state={
  // The physical bead model represented by the E values currently in the text.
  // This must NOT change merely because the user changes the nozzle selector.
  gcodeModel:null,
- rheoOverride:null
+ rheoOverride:null,
+ estimateOverride:null
 };
 
 function v(x=0,y=0,z=0){return{x,y,z}}
@@ -898,6 +976,345 @@ function draw(){
  }
 }
 
+
+function currentEstimateSettings(){
+ const base=MACHINES[$("machine").value].estimate;
+ return state.estimateOverride?{...base,...state.estimateOverride}:{...base};
+}
+function formatDuration(sec){
+ sec=Math.max(0,Math.round(sec||0));
+ const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;
+ return h?`${h}h ${m}m ${s}s`:`${m}m ${s}s`;
+}
+
+function axisLimitedSpeed(dir,requested,cal,eOnly=false){
+ let vv=requested;
+ if(eOnly)return Math.min(vv,cal.maxE||30);
+ const ax=Math.abs(dir.x),ay=Math.abs(dir.y),az=Math.abs(dir.z);
+ if(ax>1e-12)vv=Math.min(vv,(cal.maxXY||500)/ax);
+ if(ay>1e-12)vv=Math.min(vv,(cal.maxXY||500)/ay);
+ if(az>1e-12)vv=Math.min(vv,(cal.maxZ||30)/az);
+ return Math.max(0,vv);
+}
+function axisLimitedAccel(dir,base,cal,eOnly=false){
+ if(eOnly)return Math.max(1,Math.min(base,cal.eAccel||5000));
+ let aa=base,ax=Math.abs(dir.x),ay=Math.abs(dir.y),az=Math.abs(dir.z);
+ if(ax>1e-12)aa=Math.min(aa,(cal.printAccel||20000)/ax);
+ if(ay>1e-12)aa=Math.min(aa,(cal.printAccel||20000)/ay);
+ if(az>1e-12)aa=Math.min(aa,(cal.zAccel||1500)/az);
+ return Math.max(1,aa);
+}
+function junctionSpeed(prev,curr,cal){
+ if(!prev||!curr||prev.eOnly||curr.eOnly)return 0;
+ let vmax=Math.min(prev.nominal,curr.nominal);
+ const du={x:curr.dir.x-prev.dir.x,y:curr.dir.y-prev.dir.y,z:curr.dir.z-prev.dir.z};
+ const jx=cal.jerkXY||9,jy=cal.jerkXY||9,jz=cal.jerkZ||5;
+ if(Math.abs(du.x)>1e-12)vmax=Math.min(vmax,jx/Math.abs(du.x));
+ if(Math.abs(du.y)>1e-12)vmax=Math.min(vmax,jy/Math.abs(du.y));
+ if(Math.abs(du.z)>1e-12)vmax=Math.min(vmax,jz/Math.abs(du.z));
+ return Math.max(0,vmax);
+}
+function trapezoidTime(distance,vi,vf,vnom,a){
+ distance=Math.max(0,distance);a=Math.max(1e-9,a);
+ vi=Math.max(0,Math.min(vi,vnom));vf=Math.max(0,Math.min(vf,vnom));
+ const da=Math.max(0,(vnom*vnom-vi*vi)/(2*a));
+ const dd=Math.max(0,(vnom*vnom-vf*vf)/(2*a));
+ let peak=vnom,tAccel=0,tCruise=0,tDecel=0,cruise=0,triangular=false;
+ if(da+dd<=distance+1e-12){
+   cruise=Math.max(0,distance-da-dd);
+   tAccel=(peak-vi)/a;tDecel=(peak-vf)/a;tCruise=peak>0?cruise/peak:0;
+ }else{
+   triangular=true;
+   peak=Math.sqrt(Math.max(0,(2*a*distance+vi*vi+vf*vf)/2));
+   peak=Math.min(peak,vnom);
+   const da2=Math.max(0,(peak*peak-vi*vi)/(2*a));
+   const dd2=Math.max(0,(peak*peak-vf*vf)/(2*a));
+   cruise=Math.max(0,distance-da2-dd2);
+   tAccel=(peak-vi)/a;tDecel=(peak-vf)/a;tCruise=peak>0?cruise/peak:0;
+ }
+ return{time:tAccel+tCruise+tDecel,tAccel,tCruise,tDecel,peak,triangular,cruiseDistance:cruise};
+}
+function buildMotionPlan(text){
+ const lines=text.split(/\r?\n/),cal=currentEstimateSettings();
+ let p=v(0,0,0),e=0,absXYZ=true,absE=true,feed=null;
+ let printAccel=cal.printAccel||20000,travelAccel=cal.travelAccel||9000,group=0;
+ const blocks=[];
+ const barrier=()=>{group++};
+
+ for(let i=0;i<lines.length;i++){
+   const code=lines[i].split(";")[0].trim();
+   if(!code)continue;
+   if(code==="G90"){absXYZ=true;continue}
+   if(code==="G91"){absXYZ=false;continue}
+   if(code==="M82"){absE=true;continue}
+   if(code==="M83"){absE=false;continue}
+
+   let mm=code.match(/^M204\b.*?(?:^|\s)S(-?\d+(?:\.\d+)?)/i);
+   if(mm){printAccel=travelAccel=Math.max(1,+mm[1]);continue}
+   mm=code.match(/^M204\b.*?(?:^|\s)P(-?\d+(?:\.\d+)?)/i);
+   if(mm)printAccel=Math.max(1,+mm[1]);
+   mm=code.match(/^M204\b.*?(?:^|\s)T(-?\d+(?:\.\d+)?)/i);
+   if(mm)travelAccel=Math.max(1,+mm[1]);
+
+   if(/^(G28|G29|G4|M109|M190|M400)\b/i.test(code)){barrier();continue}
+   if(/^G92\b/i.test(code)){
+     for(const x of code.matchAll(/([XYZE])\s*(-?\d+(?:\.\d+)?)/gi)){
+       const val=+x[2],k=x[1].toUpperCase();
+       if(k==="X")p.x=val;if(k==="Y")p.y=val;if(k==="Z")p.z=val;if(k==="E")e=val;
+     }
+     continue;
+   }
+   if(!/^G0?1\b/i.test(code))continue;
+
+   let q={...p},ne=e,nf=feed;
+   for(const x of code.matchAll(/([XYZEF])\s*(-?\d+(?:\.\d+)?)/gi)){
+     const k=x[1].toUpperCase(),val=+x[2];
+     if(k==="X")q.x=absXYZ?val:p.x+val;
+     if(k==="Y")q.y=absXYZ?val:p.y+val;
+     if(k==="Z")q.z=absXYZ?val:p.z+val;
+     if(k==="E")ne=absE?val:e+val;
+     if(k==="F")nf=val;
+   }
+   const dxyz=dist3(p,q),de=ne-e,eOnly=dxyz<=1e-9&&Math.abs(de)>1e-9;
+   const distance=eOnly?Math.abs(de):dxyz;
+   if(distance>1e-9&&nf>0){
+     const dir=eOnly?{x:0,y:0,z:0}:mul(sub(q,p),1/dxyz);
+     const extruding=de>1e-8&&dxyz>1e-9;
+     const nominal=axisLimitedSpeed(dir,nf/60,cal,eOnly);
+     const baseAccel=eOnly?(cal.eAccel||5000):(extruding?printAccel:travelAccel);
+     const accel=axisLimitedAccel(dir,baseAccel,cal,eOnly);
+     blocks.push({line:i,group,distance,dir,eOnly,extruding,nominal,accel,maxEntry:0,entry:0,exit:0,profile:null,naive:nominal>0?distance/nominal:0});
+   }
+   p=q;e=ne;feed=nf;
+ }
+
+ // Maximum entry speed at each junction from direction change and jerk limits.
+ for(let i=0;i<blocks.length;i++){
+   const b=blocks[i],prev=i?blocks[i-1]:null;
+   b.maxEntry=(!prev||prev.group!==b.group)?0:junctionSpeed(prev,b,cal);
+   b.entry=Math.min(b.nominal,b.maxEntry);
+ }
+
+ // Reverse planner: can this block decelerate to the next entry speed within its own length?
+ for(let i=blocks.length-1;i>=0;i--){
+   const b=blocks[i],next=(i+1<blocks.length&&blocks[i+1].group===b.group)?blocks[i+1]:null;
+   const target=next?next.entry:0;
+   const allowed=Math.sqrt(Math.max(0,target*target+2*b.accel*b.distance));
+   b.entry=Math.min(b.entry,b.nominal,allowed);
+ }
+
+ // Forward planner: can the previous block accelerate to this entry speed?
+ for(let i=1;i<blocks.length;i++){
+   const prev=blocks[i-1],b=blocks[i];
+   if(prev.group!==b.group){b.entry=0;continue}
+   const allowed=Math.sqrt(Math.max(0,prev.entry*prev.entry+2*prev.accel*prev.distance));
+   b.entry=Math.min(b.entry,b.nominal,allowed);
+ }
+
+ // Final reverse pass after the forward corrections.
+ for(let i=blocks.length-1;i>=0;i--){
+   const b=blocks[i],next=(i+1<blocks.length&&blocks[i+1].group===b.group)?blocks[i+1]:null;
+   const target=next?next.entry:0;
+   const allowed=Math.sqrt(Math.max(0,target*target+2*b.accel*b.distance));
+   b.entry=Math.min(b.entry,b.nominal,allowed);
+ }
+
+ let total=0,naive=0,tAccel=0,tCruise=0,tDecel=0,triangles=0,maxPeak=0;
+ const lineTime=new Map(),lineBlock=new Map();
+ for(let i=0;i<blocks.length;i++){
+   const b=blocks[i],next=(i+1<blocks.length&&blocks[i+1].group===b.group)?blocks[i+1]:null;
+   b.exit=next?next.entry:0;
+   b.profile=trapezoidTime(b.distance,b.entry,b.exit,b.nominal,b.accel);
+   total+=b.profile.time;naive+=b.naive;tAccel+=b.profile.tAccel;tCruise+=b.profile.tCruise;tDecel+=b.profile.tDecel;
+   if(b.profile.triangular)triangles++;
+   maxPeak=Math.max(maxPeak,b.profile.peak);
+   lineTime.set(b.line,(lineTime.get(b.line)||0)+b.profile.time);
+   lineBlock.set(b.line,b);
+ }
+ return{blocks,lineTime,lineBlock,total,naive,tAccel,tCruise,tDecel,triangles,maxPeak};
+}
+function motionProfileForLine(lineIndex){
+ const plan=buildMotionPlan(ta.value),b=plan.lineBlock.get(lineIndex);
+ if(!b||!b.profile)return"";
+ const kind=b.profile.triangular?"三角":"台形";
+ return `速度 ${fmt(b.entry,2)} → ${fmt(b.profile.peak,2)} → ${fmt(b.exit,2)} mm/s | a=${fmt(b.accel,0)} mm/s² | ${kind} | ${fmt(b.profile.time,3)} s`;
+}
+
+function estimateGcodeDetailed(text){
+ const lines=text.split(/\r?\n/),mach=MACHINES[$("machine").value],mat=MATERIALS[$("material").value],cal=currentEstimateSettings();
+ const motionPlan=buildMotionPlan(text);
+ let p=v(0,0,0),e=0,absXYZ=true,absE=true,feed=null;
+ let motionTime=0,dwellTime=0,prepTime=0,heatWait=0,totalDistance=0,printDistance=0,travelDistance=0,totalExt=0;
+ let firstTemp=null,firstBed=null;
+ let now=0;
+ let hot={temp:cal.ambient,target:cal.ambient},bed={temp:cal.ambient,target:cal.ambient};
+ const cumulative=new Array(lines.length).fill(0);
+
+ function advanceHeater(h,dt,upRate,downRate){
+   if(dt<=0)return;
+   const diff=h.target-h.temp;
+   if(diff>0)h.temp=Math.min(h.target,h.temp+upRate*dt);
+   else if(diff<0)h.temp=Math.max(h.target,h.temp-downRate*dt);
+ }
+ function advance(dt,kind){
+   if(!(dt>0))return;
+   advanceHeater(hot,dt,cal.hotRate,cal.hotCool||1);
+   advanceHeater(bed,dt,cal.bedRate,cal.bedCool||.2);
+   now+=dt;
+   if(kind==="motion")motionTime+=dt;
+   if(kind==="dwell")dwellTime+=dt;
+   if(kind==="prep")prepTime+=dt;
+   if(kind==="heat")heatWait+=dt;
+ }
+ function waitHeater(h,target,upRate,downRate){
+   h.target=target;
+   const rate=target>=h.temp?upRate:downRate;
+   const dt=rate>0?Math.abs(target-h.temp)/rate:0;
+   advance(dt,"heat");
+   h.temp=target;
+ }
+
+ for(let i=0;i<lines.length;i++){
+   const raw=lines[i],code=raw.split(";")[0].trim();
+   if(!code){cumulative[i]=now;continue}
+   if(code==="G90"){absXYZ=true;cumulative[i]=now;continue}
+   if(code==="G91"){absXYZ=false;cumulative[i]=now;continue}
+   if(code==="M82"){absE=true;cumulative[i]=now;continue}
+   if(code==="M83"){absE=false;cumulative[i]=now;continue}
+
+   let m=code.match(/^M104\b.*?(?:^|\s)S(-?\d+(?:\.\d+)?)/i);
+   if(m){hot.target=+m[1];if(firstTemp===null&&+m[1]>0)firstTemp=+m[1];cumulative[i]=now;continue}
+   m=code.match(/^M140\b.*?(?:^|\s)S(-?\d+(?:\.\d+)?)/i);
+   if(m){bed.target=+m[1];if(firstBed===null&&+m[1]>0)firstBed=+m[1];cumulative[i]=now;continue}
+   m=code.match(/^M109\b.*?(?:^|\s)S(-?\d+(?:\.\d+)?)/i);
+   if(m){const t=+m[1];if(firstTemp===null&&t>0)firstTemp=t;waitHeater(hot,t,cal.hotRate,cal.hotCool||1);cumulative[i]=now;continue}
+   m=code.match(/^M190\b.*?(?:^|\s)S(-?\d+(?:\.\d+)?)/i);
+   if(m){const t=+m[1];if(firstBed===null&&t>0)firstBed=t;waitHeater(bed,t,cal.bedRate,cal.bedCool||.2);cumulative[i]=now;continue}
+
+   m=code.match(/^M400\b.*?(?:^|\s)P(\d+(?:\.\d+)?)/i);
+   if(m){advance(+m[1]/1000,"dwell");cumulative[i]=now;continue}
+   m=code.match(/^M400\b.*?(?:^|\s)S(\d+(?:\.\d+)?)/i);
+   if(m){advance(+m[1],"dwell");cumulative[i]=now;continue}
+   if(/^G28\b/i.test(code)){advance(cal.home||0,"prep");cumulative[i]=now;continue}
+   if(/^G29\b/i.test(code)){advance(cal.level||0,"prep");cumulative[i]=now;continue}
+   m=code.match(/^G4\b.*?(?:^|\s)P(\d+(?:\.\d+)?)/i);
+   if(m){advance(+m[1]/1000,"dwell");cumulative[i]=now;continue}
+   m=code.match(/^G4\b.*?(?:^|\s)S(\d+(?:\.\d+)?)/i);
+   if(m){advance(+m[1],"dwell");cumulative[i]=now;continue}
+
+   if(/^G92\b/i.test(code)){
+     for(const mm of code.matchAll(/([XYZE])\s*(-?\d+(?:\.\d+)?)/gi)){
+       const val=+mm[2],k=mm[1].toUpperCase();
+       if(k==="X")p.x=val;if(k==="Y")p.y=val;if(k==="Z")p.z=val;if(k==="E")e=val;
+     }
+     cumulative[i]=now;continue;
+   }
+
+   if(/^G0?1\b/i.test(code)){
+     let q={...p},ne=e,nf=feed;
+     for(const mm of code.matchAll(/([XYZEF])\s*(-?\d+(?:\.\d+)?)/gi)){
+       const k=mm[1].toUpperCase(),val=+mm[2];
+       if(k==="X")q.x=absXYZ?val:p.x+val;
+       if(k==="Y")q.y=absXYZ?val:p.y+val;
+       if(k==="Z")q.z=absXYZ?val:p.z+val;
+       if(k==="E")ne=absE?val:e+val;
+       if(k==="F")nf=val;
+     }
+     const d=dist3(p,q),de=ne-e;
+     if(d>1e-9){
+       totalDistance+=d;
+       if(de>1e-8){printDistance+=d;totalExt+=de}else travelDistance+=d;
+     }else if(de>1e-8){
+       totalExt+=de;
+     }
+     const plannedDt=motionPlan.lineTime.get(i)||0;
+     if(plannedDt>0)advance(plannedDt,"motion");
+     p=q;e=ne;feed=nf;cumulative[i]=now;continue;
+   }
+   cumulative[i]=now;
+ }
+ const volumeCm3=totalExt*filamentArea(1.75)/1000;
+ const grams=volumeCm3*mat.density;
+ return{
+   lines,cumulative,totalSec:now,motionTime,dwellTime,prepTime,heatWait,totalDistance,printDistance,travelDistance,
+   totalExt,volumeCm3,grams,firstTemp,firstBed,cal,motionPlan,
+   naiveMotionTime:motionPlan.naive,
+   accelTime:motionPlan.tAccel,cruiseTime:motionPlan.tCruise,decelTime:motionPlan.tDecel,
+   triangularBlocks:motionPlan.triangles,
+   avgSpeed:motionTime>0?totalDistance/motionTime:0
+ };
+}
+function stripProgressM73(text){
+ return text.split(/\r?\n/).filter(l=>!/^M73\s+P\d+\s+R\d+\b/i.test(l.split(";")[0].trim())).join("\n");
+}
+function injectBambuProgress(text){
+ // Bambu Studio normal mode uses M73 P<percent> R<remaining minutes>.
+ let clean=stripProgressM73(text),est=estimateGcodeDetailed(clean),ls=clean.split(/\r?\n/);
+ const total=Math.max(1,est.totalSec),out=[];
+ let nextPct=1;
+ // Put initial estimate after the generated config/header block and before executable commands.
+ let initialInserted=false;
+ for(let i=0;i<ls.length;i++){
+   const line=ls[i];
+   out.push(line);
+   if(!initialInserted && line.trim()==="; CONFIG_BLOCK_END"){
+     out.push(`; model printing time: ${formatDuration(est.motionTime)}; total estimated time: ${formatDuration(est.totalSec)}`);
+     out.push(`; total filament length [mm] : ${est.totalExt.toFixed(2)}`);
+     out.push(`; total filament volume [cm^3] : ${est.volumeCm3.toFixed(3)}`);
+     out.push(`; total filament weight [g] : ${est.grams.toFixed(2)}`);
+     out.push(`M73 P0 R${Math.max(1,Math.ceil(total/60))} ; GcodeEditor estimated remaining time`);
+     initialInserted=true;
+   }
+   const elapsed=est.cumulative[i]||0;
+   const pct=Math.min(99,Math.floor(100*elapsed/total));
+   while(nextPct<=pct && nextPct<=99){
+     const remain=Math.max(1,Math.ceil((total-elapsed)/60));
+     out.push(`M73 P${nextPct} R${remain}`);
+     nextPct++;
+   }
+ }
+ if(!initialInserted){
+   out.unshift(`M73 P0 R${Math.max(1,Math.ceil(total/60))} ; GcodeEditor estimated remaining time`);
+   out.unshift(`; total filament weight [g] : ${est.grams.toFixed(2)}`);
+   out.unshift(`; total filament length [mm] : ${est.totalExt.toFixed(2)}`);
+   out.unshift(`; total estimated time: ${formatDuration(est.totalSec)}`);
+ }
+ out.push("M73 P100 R0");
+ return{text:out.join("\n").replace(/\n+$/,"")+"\n",estimate:est};
+}
+function updateEstimateUI(est=estimateGcodeDetailed(ta.value)){
+ $("distanceEst").textContent=`${fmt(est.totalDistance/1000,2)} m`;
+ $("filament").textContent=`${fmt(est.totalExt/1000,3)} m`;
+ $("filamentWeight").textContent=`${fmt(est.grams,2)} g`;
+ $("heatEst").textContent=formatDuration(est.heatWait);
+ $("timeEst").textContent=formatDuration(est.totalSec);
+
+ const mach=MACHINES[$("machine").value],mat=MATERIALS[$("material").value],noz=+$("nozzle").value;
+ if($("estProfile"))$("estProfile").textContent=`${mach.name} / ${mat.name} / ${fmt(noz,1)} mm`;
+ if($("estDistance"))$("estDistance").textContent=`${fmt(est.totalDistance,1)} mm`;
+ if($("estPrintDistance"))$("estPrintDistance").textContent=`${fmt(est.printDistance,1)} mm`;
+ if($("estTravelDistance"))$("estTravelDistance").textContent=`${fmt(est.travelDistance,1)} mm`;
+ if($("estMotionTime"))$("estMotionTime").textContent=formatDuration(est.motionTime);
+ if($("estNaiveTime"))$("estNaiveTime").textContent=formatDuration(est.naiveMotionTime);
+ if($("estPhases"))$("estPhases").textContent=`${formatDuration(est.accelTime)} / ${formatDuration(est.cruiseTime)} / ${formatDuration(est.decelTime)}`;
+ if($("estBlockCount"))$("estBlockCount").textContent=`${est.motionPlan.blocks.length} / ${est.triangularBlocks}`;
+ if($("estAvgSpeed"))$("estAvgSpeed").textContent=`${fmt(est.avgSpeed,2)} mm/s`;
+ if($("estHeatTime"))$("estHeatTime").textContent=formatDuration(est.heatWait);
+ if($("estPrepTime"))$("estPrepTime").textContent=formatDuration(est.prepTime);
+ if($("estDwellTime"))$("estDwellTime").textContent=formatDuration(est.dwellTime);
+ if($("estTotalTime"))$("estTotalTime").textContent=formatDuration(est.totalSec);
+ if($("estFilLen"))$("estFilLen").textContent=`${fmt(est.totalExt,1)} mm (${fmt(est.totalExt/1000,3)} m)`;
+ if($("estFilMass"))$("estFilMass").textContent=`${fmt(est.volumeCm3,3)} cm³ / ${fmt(est.grams,2)} g`;
+}
+function fillEstimateSettings(){
+ const c=currentEstimateSettings();
+ $("estAmbient").value=c.ambient;$("estHotRate").value=c.hotRate;$("estBedRate").value=c.bedRate;
+ $("estHomeSec").value=c.home;$("estLevelSec").value=c.level;
+ $("estPrintAccel").value=c.printAccel;$("estTravelAccel").value=c.travelAccel;$("estZAccel").value=c.zAccel;
+ $("estJerkXY").value=c.jerkXY;$("estJerkZ").value=c.jerkZ;
+ updateEstimateUI();
+}
+
 function parseGcode(text){
  const lines=text.split(/\r?\n/);
  let p=v(0,0,0), e=0, absXYZ=true, absE=true, feed=null;
@@ -956,10 +1373,8 @@ function reparse(pushHistory=false){
      const m=MACHINES[$("machine").value], bad=r.min.x<0||r.min.y<0||r.min.z<0||r.max.x>m.bed[0]||r.max.y>m.bed[1]||r.max.z>m.bed[2];
      $("safeBadge").textContent=bad?"機体範囲外あり":"機体範囲内";$("safeBadge").className="badge "+(bad?"warn":"ok");
    } else $("bounds").textContent="—";
-   const mat=MATERIALS[$("material").value], vol=r.totalExt*Math.PI*(1.75/2)**2/1000, grams=vol*mat.density;
-   $("filament").textContent=`${fmt(r.totalExt,0)} mm / ${fmt(grams,2)} g`;
-   const sec=Math.max(0,r.totalTime), h=Math.floor(sec/3600), mi=Math.floor((sec%3600)/60), ss=Math.round(sec%60);
-   $("timeEst").textContent=(h?h+"h ":"")+mi+"m "+ss+"s";
+   const est=estimateGcodeDetailed(ta.value);
+   updateEstimateUI(est);
    if(pushHistory)saveHistory();
    if(state.selected>=state.segments.length)state.selected=-1;
    updateSelectedInfo();
@@ -1035,7 +1450,8 @@ function updateTextLineUI(){
  const top=10 + ln*18 - ta.scrollTop;
  lineHighlight.style.top=`${top}px`;
  lineHighlight.style.display=(top>-18 && top<ta.clientHeight)?"block":"none";
- lineHelpBar.innerHTML=`<b>L${ln+1}</b>　${escapeHtml(explainGcodeLine(ln))}`;
+ const mp=motionProfileForLine(ln);
+ lineHelpBar.innerHTML=`<b>L${ln+1}</b>　${escapeHtml(explainGcodeLine(ln))}${mp?`<br><span style="color:#ffb15d">${escapeHtml(mp)}</span>`:""}`;
 }
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function updateSelectedInfo(){
@@ -1160,7 +1576,7 @@ $("saveRheoBtn").onclick=()=>{
 };
 
 $("material").addEventListener("change",()=>{syncMaterialModelDefaults();updateTemperatureBadge();reparse(false)});
-$("machine").addEventListener("change",()=>{state.selected=-1;updateDesignModel();reparse(false)});
+$("machine").addEventListener("change",()=>{state.selected=-1;state.estimateOverride=null;updateDesignModel();reparse(false)});
 $("nozzle").addEventListener("change",()=>{state.selected=-1;updateDesignModel();reparse(false)});
 $("designBasis").addEventListener("change",updateDesignModel);
 ["mvs","safety","lineWidth","layerHeight","flow","printSpeed","hotend"].forEach(id=>$(id).addEventListener("input",updateDesignModel));
@@ -1654,19 +2070,21 @@ $("save3mfBtn").onclick=async()=>{
      const ok=confirm("3MF出力前の確認:\n\n"+pre.warnings.map(x=>"・"+x).join("\n")+"\n\nこの条件で出力しますか？");
      if(!ok)throw new Error("ユーザーが警告確認で3MF出力を中止しました。");
    }
-   const gcode=normalizeForBambu(pre.text),gb=enc.encode(gcode),hash=md5(gb),r=parseGcode(gcode);
+   const normalized=normalizeForBambu(pre.text);
+   const progressed=injectBambuProgress(normalized);
+   const gcode=progressed.text,est=progressed.estimate,gb=enc.encode(gcode),hash=md5(gb),r=parseGcode(gcode);
    const ext=r.segs.filter(s=>s.extrude);
    const minx=ext.length?Math.min(...ext.flatMap(s=>[s.a.x,s.b.x])):0,maxx=ext.length?Math.max(...ext.flatMap(s=>[s.a.x,s.b.x])):0;
    const miny=ext.length?Math.min(...ext.flatMap(s=>[s.a.y,s.b.y])):0,maxy=ext.length?Math.max(...ext.flatMap(s=>[s.a.y,s.b.y])):0;
    const maxz=ext.length?Math.max(...ext.flatMap(s=>[s.a.z,s.b.z])):0;
-   const vol=r.totalExt*Math.PI*(1.75/2)**2/1000,grams=vol*mat.density,pred=Math.ceil(r.totalTime+180);
+   const vol=est.volumeCm3,grams=est.grams,pred=Math.ceil(est.totalSec);
    const large=makeThumb(512),small=makeThumb(128);
    const ct=`<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="gcode" ContentType="text/x.gcode"/><Default Extension="json" ContentType="application/json"/><Default Extension="config" ContentType="application/octet-stream"/></Types>`;
    const rels=`<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/><Relationship Target="/Metadata/plate_1.png" Id="rel-2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail"/></Relationships>`;
    const model=`<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021"><metadata name="Application">BambuStudio-02.05.00.66</metadata><metadata name="BambuStudio:3mfVersion">1</metadata><metadata name="Title">GcodeEditor toolpath</metadata><metadata name="Description">Custom G-code generated by GcodeEditor. Do not re-slice.</metadata><resources/><build/></model>`;
    const modelrels=`<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/Metadata/plate_1.gcode" Id="rel-1" Type="http://schemas.bambulab.com/package/2021/gcode"/></Relationships>`;
    const modelsettings=`<?xml version="1.0" encoding="UTF-8"?><config><plate><metadata key="plater_id" value="1"/><metadata key="plater_name" value="GcodeEditor"/><metadata key="locked" value="false"/><metadata key="filament_maps" value="1"/><metadata key="gcode_file" value="Metadata/plate_1.gcode"/><metadata key="thumbnail_file" value="Metadata/plate_1.png"/></plate></config>`;
-   const slice=`<?xml version="1.0" encoding="UTF-8"?><config><header><header_item key="X-BBL-Client-Type" value="slicer"/><header_item key="X-BBL-Client-Version" value="02.05.00.66"/></header><plate><metadata key="index" value="1"/><metadata key="printer_model_id" value="${mach.modelId}"/><metadata key="nozzle_diameters" value="${noz}"/><metadata key="prediction" value="${pred}"/><metadata key="weight" value="${grams.toFixed(2)}"/><metadata key="outside" value="false"/><object identify_id="1" name="GcodeEditor_path" skipped="false"/><filament id="1" tray_info_idx="${mat.id}" type="${mat.type}" color="#FFFFFF" used_m="${(r.totalExt/1000).toFixed(2)}" used_g="${grams.toFixed(2)}" used_for_object="true" used_for_support="false" group_id="0" nozzle_diameter="${noz.toFixed(2)}" volume_type="Standard"/><nozzle id="0" extruder_id="1" nozzle_diameter="${noz}" volume_type="Standard"/></plate></config>`;
+   const slice=`<?xml version="1.0" encoding="UTF-8"?><config><header><header_item key="X-BBL-Client-Type" value="slicer"/><header_item key="X-BBL-Client-Version" value="02.05.00.66"/></header><plate><metadata key="index" value="1"/><metadata key="printer_model_id" value="${mach.modelId}"/><metadata key="nozzle_diameters" value="${noz}"/><metadata key="prediction" value="${pred}"/><metadata key="weight" value="${grams.toFixed(2)}"/><metadata key="gcode_editor_motion_time" value="${Math.round(est.motionTime)}"/><metadata key="gcode_editor_naive_motion_time" value="${Math.round(est.naiveMotionTime)}"/><metadata key="gcode_editor_accel_time" value="${Math.round(est.accelTime)}"/><metadata key="gcode_editor_cruise_time" value="${Math.round(est.cruiseTime)}"/><metadata key="gcode_editor_decel_time" value="${Math.round(est.decelTime)}"/><metadata key="gcode_editor_triangular_blocks" value="${est.triangularBlocks}"/><metadata key="gcode_editor_heater_wait_time" value="${Math.round(est.heatWait)}"/><metadata key="gcode_editor_filament_length_mm" value="${est.totalExt.toFixed(2)}"/><metadata key="outside" value="false"/><object identify_id="1" name="GcodeEditor_path" skipped="false"/><filament id="1" tray_info_idx="${mat.id}" type="${mat.type}" color="#FFFFFF" used_m="${(est.totalExt/1000).toFixed(3)}" used_g="${grams.toFixed(2)}" used_for_object="true" used_for_support="false" group_id="0" nozzle_diameter="${noz.toFixed(2)}" volume_type="Standard"/><nozzle id="0" extruder_id="1" nozzle_diameter="${noz}" volume_type="Standard"/></plate></config>`;
    const plateJson=JSON.stringify({bbox_all:[minx,miny,maxx,maxy],bbox_objects:[{area:(maxx-minx)*(maxy-miny),bbox:[minx,miny,maxx,maxy],id:1,layer_height:+$("layerHeight").value,name:"GcodeEditor_path"}],bed_type:"textured_plate",filament_colors:["#FFFFFF"],filament_ids:[1],first_extruder:0,is_seq_print:false,nozzle_diameter:noz,version:2});
    const entries=[
      ["[Content_Types].xml",ct],["Metadata/plate_1.png",large],["Metadata/plate_1_small.png",small],["Metadata/bbl_thumbnail.png",large],
@@ -1702,6 +2120,21 @@ document.querySelectorAll('.helpDot[data-help]').forEach(b=>b.addEventListener('
 $("settingHelpClose").onclick=()=>$("settingHelpPanel").classList.remove('show');
 $("settingHelpPanel").onclick=e=>{if(e.target===$("settingHelpPanel"))$("settingHelpPanel").classList.remove('show')};
 
+
+$("estimateDetailBtn").onclick=()=>{fillEstimateSettings();$("estimateModal").classList.add("show")};
+$("closeEstimateBtn").onclick=()=>$("estimateModal").classList.remove("show");
+$("estimateModal").onclick=e=>{if(e.target===$("estimateModal"))$("estimateModal").classList.remove("show")};
+$("resetEstimateBtn").onclick=()=>{state.estimateOverride=null;fillEstimateSettings();updateEstimateUI()};
+$("applyEstimateBtn").onclick=()=>{
+ state.estimateOverride={
+   ambient:+$("estAmbient").value,hotRate:+$("estHotRate").value,bedRate:+$("estBedRate").value,
+   home:+$("estHomeSec").value,level:+$("estLevelSec").value,
+   printAccel:+$("estPrintAccel").value,travelAccel:+$("estTravelAccel").value,zAccel:+$("estZAccel").value,
+   jerkXY:+$("estJerkXY").value,jerkZ:+$("estJerkZ").value
+ };
+ $("estimateModal").classList.remove("show");updateEstimateUI();reparse(false);
+};
+
 $("gcodeHelpBtn").onclick=()=>$("gcodeHelpPanel").classList.toggle("show");
 $("closeGcodeHelp").onclick=()=>$("gcodeHelpPanel").classList.remove("show");
 $("helpBtn").onclick=()=>$("helpModal").classList.add("show");
@@ -1713,7 +2146,7 @@ ta.value=SAMPLE_GCODE;
 // The bundled sample was authored for the original 0.8 mm setup.
 state.gcodeModel={nozzle:0.8,width:0.8,height:0.4,flow:+$("flow").value||0.98,material:$("material").value};
 reparse(false);saveHistory();
-updateDesignModel();updateTemperatureBadge();
+updateDesignModel();updateTemperatureBadge();updateEstimateUI();
 requestAnimationFrame(()=>{resize();setView("iso")});
 </script>
 </body>
