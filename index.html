@@ -105,6 +105,14 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
 #modelExample{background:#fff8e9;border:1px solid #ead7aa;border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.7}
 .designWarn{color:#9a4f1e;font-weight:650}
 
+
+.rheoGrid{display:grid;grid-template-columns:150px 1fr 82px;gap:8px 10px;align-items:center;font-size:12px}
+.rheoGrid input{width:100%}
+.rheoNote{margin-top:12px;padding:9px 11px;background:#fff8e8;border:1px solid #e6d7aa;border-radius:8px;font-size:12px;line-height:1.65;color:#544629}
+.rheoSource{margin-top:10px;font-size:11px;line-height:1.55;color:#5c625e}
+.rheoSource a{color:#175a41;word-break:break-all}
+.rheoConfidence{display:inline-block;padding:2px 6px;border-radius:999px;background:#ecefe9;color:#4f5a52;font-size:10px}
+
 </style>
 </head>
 <body>
@@ -146,7 +154,7 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
   <div class="field"><label>Flow</label><button class="helpDot" data-help="flow" title="Flowとは？">?</button><input id="flow" type="number" value="0.98" step=".01"></div>
   <div class="field"><label>MVS</label><button class="helpDot" data-help="mvs" title="MVSとは？">?</button><input id="mvs" type="number" value="21" step="0.5"><span>mm³/s</span></div>
   <div class="field"><label>安全率</label><button class="helpDot" data-help="safety" title="安全率とは？">?</button><input id="safety" type="number" value="75" min="20" max="100" step="5"><span>%</span></div>
-  <button id="applySettings" class="primary">一括反映（温度・全速度）</button>
+  <button id="applySettings" class="primary">一括反映（ノズル・E・温度・速度）</button>
 </div>
 
 <div id="designBar">
@@ -159,8 +167,11 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
   <span class="metric"><small>推奨造形速度</small><b id="recSpeedModel">—</b></span>
   <span class="metric"><small>E / 100 mm</small><b id="recE100">—</b></span>
   <span class="metric"><small>現在の流量</small><b id="currentQ">—</b></span>
+  <span class="metric"><small>見かけ粘度 η</small><b id="currentEta">—</b></span>
+  <span class="metric"><small>粘性補正Q上限</small><b id="rheoQmax">—</b></span>
   <button id="tempSafetyBadge" class="badge ok" data-help="temperatureSafety" style="border:0;cursor:pointer">温度G-code OK</button>
   <button id="applyDesignBtn">推奨値を入力欄へ</button>
+  <button id="rheoBtn">粘性パラメータ</button>
   <button id="modelHelpBtn" class="primary">考え方・数式・文献</button>
 </div>
 
@@ -253,10 +264,36 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
 <input id="fileInput" type="file" accept=".gcode,.txt" hidden>
 
 
+
+<div id="rheoModal" class="modal">
+<div class="dialog" style="width:min(650px,92vw)">
+ <h2>溶融粘性モデルのパラメータ</h2>
+ <p>材料を選ぶと文献代表値が入ります。Bambu PLA Basicなど製品固有のレオロジー測定値ではなく、同種ポリマーの文献値です。必要なら実測値に置き換えられます。</p>
+ <div class="rheoGrid">
+   <b>Power-law指数 n</b><input id="rheoN" type="number" step="0.001"><span>—</span>
+   <b>整合性指数 Kref</b><input id="rheoK" type="number" step="0.1"><span>Pa·sⁿ</span>
+   <b>基準温度 Tref</b><input id="rheoTref" type="number" step="1"><span>℃</span>
+   <b>流動活性化エネルギー Ea</b><input id="rheoEa" type="number" step="0.1"><span>kJ/mol</span>
+   <b>MVS基準ノズル</b><input id="rheoDref" type="number" step="0.1" value="0.4"><span>mm</span>
+ </div>
+ <div class="rheoNote">
+  Kとnは <b>η = K(T)·γ̇<sup>n−1</sup></b> に使います。温度依存性は
+  <b>K(T)=Kref·exp[(Ea/R)(1/T−1/Tref)]</b> で補正します。
+  これらは材料の「流れにくさ」と「強いせん断でどれだけ粘度が下がるか」を表します。
+ </div>
+ <div id="rheoSourceBox" class="rheoSource"></div>
+ <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+   <button id="resetRheoBtn">文献値に戻す</button>
+   <button id="saveRheoBtn" class="primary">適用</button>
+   <button id="closeRheoBtn">閉じる</button>
+ </div>
+</div>
+</div>
+
 <div id="modelHelpModal" class="modal">
 <div class="dialog">
   <h2>材料・ノズル・速度・押出し量をどう決めるか</h2>
-  <p class="modelLead">いちばん大事な考えは「1秒間に、ホットエンドが無理なく溶かせる樹脂の体積には上限がある」です。太い線を速く引くほど、1秒に必要な樹脂が増えます。そこで、線の太さと材料の流せる量から、安全な速さを逆算します。</p>
+  <p class="modelLead">v8では「線の断面積」だけでなく、「材料の溶融粘度」「せん断で粘度が下がる性質」「温度」「ノズル径」を式に入れます。さらにBambu等のMVSを実機の経験的上限として併用し、理論だけに寄りすぎない保守的な計算にします。</p>
 
   <div class="modelSection">
    <h3>1. まず、ノズルが置く樹脂線の太さを決めます</h3>
@@ -266,18 +303,30 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
   </div>
 
   <div class="modelSection">
-   <h3>2. 1秒に必要な樹脂の量を計算します</h3>
-   <div class="formula">Q = A × v</div>
-   <p><b>Q</b> は体積流量 [mm³/s]、<b>v</b> はノズルの造形速度 [mm/s] です。たとえば断面積が0.30 mm²で、50 mm/sで動けば、1秒に約15 mm³の樹脂が必要です。</p>
-   <p>材料とホットエンドには、安定して溶かせる上限 <b>Q<sub>max</sub></b> があります。スライサーではこれを <b>MVS (Maximum Volumetric Speed)</b> と呼びます。</p>
-   <div class="formula">v<span class="sub">max</span> = Q<span class="sub">max</span> / A</div>
-   <p>この式は「1秒に流せる量 ÷ 線の断面積 = 進める速さ」です。</p>
+   <h3>2. 材料は「水」のような一定粘度ではありません</h3>
+   <p>PLA・PETG・TPUなどの溶融樹脂は、多くの場合<b>せん断速度が大きいほど見かけの粘度が下がる shear-thinning（擬塑性）流体</b>です。FFF研究ではpower-lawモデルが広く使われます。</p>
+   <div class="formula">η(T,γ̇) = K(T) · γ̇^(n−1)</div>
+   <p>η [Pa·s] は見かけ粘度、K [Pa·sⁿ] は材料の「基本的な流れにくさ」、n はせん断薄化の強さです。n=1ならNewtonian、n&lt;1なら速くせん断するほど粘度が下がります。</p>
+   <p>温度が上がると粘度は下がるので、KをArrhenius式で変化させます。</p>
+   <div class="formula">K(T) = Kref · exp[(Ea/R) · (1/T − 1/Tref)]</div>
+   <p>Tは絶対温度[K]、Eaは流動活性化エネルギー[J/mol]、R=8.314 J/(mol·K)です。つまり<b>同じPLAでも200℃と220℃では流れにくさが違う</b>ことを式に入れます。</p>
   </div>
 
   <div class="modelSection">
-   <h3>3. 上限ぴったりではなく、余裕を残します</h3>
-   <div class="formula">v<span class="sub">rec</span> = s × v<span class="sub">max</span></div>
-   <p><b>s</b> は安全率です。初期値75%なら、理論上限の0.75倍を推奨速度にします。実際の造形では、温度、曲がり角、冷却、樹脂の乾燥状態、非平面軌跡の支持状態などが効くためです。</p>
+   <h3>3. ノズル内のせん断速度と圧力損失を計算します</h3>
+   <p>power-law流体の円管流では、Rabinowitsch補正を入れた壁せん断速度を次で近似できます。</p>
+   <div class="formula">γ̇w = [(3n+1)/(4n)] · 4Q/(πRn³)</div>
+   <p>Q [mm³/s] は体積流量、Rn [mm] はノズル半径です。ノズルが細くなるとRn³で効くため、せん断速度は急に大きくなります。</p>
+   <p>円筒状のノズルランド部をpower-law流体が流れる圧力損失は、文献の一般式から</p>
+   <div class="formula">ΔP = (2L/Rn) · K(T) · γ̇w^n</div>
+   <p>と書けます。Lはノズルの円筒部長さです。ただしA1 miniの内部ノズル形状・押出可能最大圧力は公開値だけでは正確に決められません。</p>
+   <p>そこで本アプリは、Bambu等の材料プロファイルにあるMVSを<b>0.4 mm基準ノズル・プロファイル温度での実機校正点</b>として使い、同じ等価圧力まで流せるQを比で求めます。</p>
+   <div class="formula">Qrheo = Qref · [K(Tprofile)/K(T)]^(1/n) · (d/dref)^(3+1/n)</div>
+   <div class="formula">Qmax = min(MVS, Qrheo)</div>
+   <p>このため、材料K・n・Ea、実際のノズル温度、ノズル径がすべて速度上限へ入ります。一方、MVSは溶融に必要な熱伝達など、この簡易圧力モデルに入らない実機要因の上限として残します。</p>
+   <p>最後に樹脂線断面積Aと安全率sを使い、</p>
+   <div class="formula">vrec = s · Qmax / A</div>
+   <p>を推奨造形速度とします。</p>
   </div>
 
   <div class="modelSection">
@@ -300,7 +349,16 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
   </div>
 
   <div class="modelSection">
-   <h3>6. 移動速度は材料の式とは別です</h3>
+   <h3>6. ノズル径を変えたとき、既存G-codeのEも変える必要があります</h3>
+   <p>たとえば0.8 mmノズル用のG-codeを、そのまま0.4 mmノズルで使うと、細いノズルなのに元と同じ量の材料を押し出そうとしてしまいます。そこで、元の樹脂線の断面積を <b>A_old</b>、新しい断面積を <b>A_new</b> として、各造形線の押出し増分を次の比で変換します。</p>
+   <div class="formula">ΔE_new = ΔE_old × (A_new × Flow_new) / (A_old × Flow_old)</div>
+   <p>0.8 mmノズル、線幅0.80 mm、高さ0.40 mmから、0.4 mmノズル、線幅0.42 mm、高さ0.20 mmへ変える場合、断面積はおよそ0.286 → 0.075 mm²になります。同じFlowなら、造形線のE増分は約0.264倍になります。</p>
+   <p>このアプリは<b>XYZ移動を伴う正の押出し</b>だけをこの比で変換します。リトラクト（引き戻し）や、XYZを動かさないEだけの操作は別の機械的意味があるため、その距離を保持します。</p>
+   <p>速度については、MVSから求めた安全上限より速い場合だけ自動的に下げます。もともとゆっくりした特殊な非平面軌跡を、勝手に高速化はしません。</p>
+  </div>
+
+  <div class="modelSection">
+   <h3>7. 移動速度は材料の式とは別です</h3>
    <p>樹脂を出さない移動では Q = 0 なのでMVSは制限になりません。移動速度はプリンタの最高速度・加速度、軌跡の長さ、ノズルが作品にぶつからないかで決まります。特に非平面G-codeでは衝突回避をスライサーに任せられないため、このアプリは高速な公称値ではなく、保守的な初期値を使います。</p>
    <p>短い距離では、設定速度まで加速する前に減速が始まります。単純な左右対称の加減速なら、距離 L と加速度 a からピーク速度のおおよその関係は <b>v ≈ √(aL)</b> です。ただし実機ファームウェアではジャークや加速度制限も入ります。</p>
   </div>
@@ -317,9 +375,14 @@ header{height:54px;display:flex;align-items:center;gap:14px;padding:0 14px;borde
     <li><a href="https://github.com/bambulab/BambuStudio/blob/master/resources/profiles/BBL/filament/Bambu%20PETG%20HF%20%40BBL%20A1M%200.8%20nozzle.json" target="_blank" rel="noopener">Bambu Studio official profile: PETG HF / A1 mini / 0.8</a> — Flow 0.94、MVS 18 mm³/s、ノズル240℃。</li>
     <li><a href="https://github.com/bambulab/BambuStudio/blob/master/resources/profiles/BBL/filament/Bambu%20TPU%2095A%20%40BBL%20A1M.json" target="_blank" rel="noopener">Bambu Studio official profile: TPU 95A / A1 mini</a> — MVS 3.6 mm³/s。</li>
     <li><a href="https://www.sciencedirect.com/science/article/pii/S2214860421003699" target="_blank" rel="noopener">Filament rheological characterization for fused filament fabrication additive manufacturing</a> — FFFノズル流れをpower-law粘度モデルで扱う研究。</li>
+    <li><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC9268954/" target="_blank" rel="noopener">Thumsorn et al., Polymers 2022</a> — PLA-N 210℃でK=381.2 Pa·sⁿ、n=0.91を報告。</li>
+    <li><a href="https://popups.uliege.be/esaform21/index.php?id=1024" target="_blank" rel="noopener">ESAFORM 2021: PLA/PMMA rheology</a> — PLAの粘度温度依存をArrhenius式で整理し、流動活性化エネルギー80 kJ/molを報告。</li>
+    <li><a href="https://journals.indexcopernicus.com/api/file/viewByFileId/828385" target="_blank" rel="noopener">PETG capillary rheology study</a> — PETGで235/245/255℃のKとnを報告。本アプリは245℃ K=3207.01 Pa·sⁿ, n=0.647を採用し、3温度のKからEa≈99.1 kJ/molを回帰。</li>
+    <li><a href="https://www.degruyter.com/document/doi/10.1515/ipp-2022-0026/html" target="_blank" rel="noopener">TPU-based porous heterostructures</a> — 代表TPUで210℃約300 Pa·sから230℃約20 Pa·sへ粘度低下し、210–230℃でほぼNewtonianと報告。</li>
+    <li><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC10744784/" target="_blank" rel="noopener">FDM thermoplastic rheology overview, 2023</a> — FDMノズル内の典型せん断速度10²–10⁴ s⁻¹、power-law/Cross/Carreau–Yasudaモデルを整理。</li>
    </ul>
   </div>
-  <p><b>重要:</b> ここで出す値は「安全な出発点を作る設計モデル」であり、材料ロットや湿気、実際のホットエンド、非平面形状まで含めた唯一の最適値ではありません。MVSは実機の流量テストで校正すると精度が上がります。</p>
+  <p><b>重要:</b> K・n・Eaは同じ樹脂名でもメーカー、分子量、添加剤、乾燥状態で変わります。Bambu製フィラメント固有の公開レオロジー値がない材料では文献代表値を使っています。そのため「粘性パラメータ」から実測値へ置換できます。MVSも実機の流量テストで校正すると精度が上がります。</p>
   <div style="text-align:right"><button id="closeModelHelp" class="primary">閉じる</button></div>
 </div>
 </div>
@@ -354,18 +417,52 @@ const MACHINES = {
   p1s:{name:"Bambu Lab P1S", modelId:"C12", bed:[256,256,256], code:"X1C", travelRec:150}
 };
 const MATERIALS = {
-  pla_basic:{name:"Bambu PLA Basic", type:"PLA", id:"GFA00", nozzle:220, bed:65, density:1.26, flow:.98, mvs:21, hotendRange:[180,250], bedRange:[20,100], source:"Bambu公式プロファイル"},
-  generic_pla:{name:"Generic PLA", type:"PLA", id:"GFL99", nozzle:220, bed:65, density:1.24, flow:.98, mvs:12, hotendRange:[180,250], bedRange:[20,100], source:"Bambu Generic PLA系の保守値"},
-  petg_hf:{name:"Bambu PETG HF", type:"PETG", id:"GFG02", nozzle:240, bed:70, density:1.28, flow:.94, mvs:18, hotendRange:[220,280], bedRange:[20,110], source:"Bambu A1 mini PETG HFプロファイル"},
-  generic_petg:{name:"Generic PETG", type:"PETG", id:"GFG99", nozzle:255, bed:70, density:1.25, flow:.95, mvs:12, hotendRange:[220,280], bedRange:[20,110], source:"Bambu Generic PETGプロファイル"},
-  tpu95:{name:"Bambu TPU 95A", type:"TPU", id:"GFU01", nozzle:230, bed:30, density:1.22, flow:1.00, mvs:3.6, hotendRange:[190,260], bedRange:[0,80], source:"Bambu A1 mini TPU 95Aプロファイル"}
+  pla_basic:{
+    name:"Bambu PLA Basic", type:"PLA", id:"GFA00", nozzle:220, bed:65, density:1.26, flow:.98, mvs:21,
+    hotendRange:[180,250], bedRange:[20,100], source:"Bambu公式プロファイル",
+    rheo:{K:381.2,n:.91,Tref:210,Ea:80.0,dref:.4,confidence:"代表値",
+      note:"K,n: neat PLA (PLA-N) at 210°C. Ea=80 kJ/mol is a separate PLA melt-flow literature value; Bambu PLA Basic固有値ではありません。",
+      url:"https://pmc.ncbi.nlm.nih.gov/articles/PMC9268954/"}
+  },
+  generic_pla:{
+    name:"Generic PLA", type:"PLA", id:"GFL99", nozzle:220, bed:65, density:1.24, flow:.98, mvs:12,
+    hotendRange:[180,250], bedRange:[20,100], source:"Bambu Generic PLA系の保守値",
+    rheo:{K:381.2,n:.91,Tref:210,Ea:80.0,dref:.4,confidence:"代表値",
+      note:"PLA-N文献代表値。実際のGeneric PLA銘柄で異なるため、必要なら実測値へ変更してください。",
+      url:"https://pmc.ncbi.nlm.nih.gov/articles/PMC9268954/"}
+  },
+  petg_hf:{
+    name:"Bambu PETG HF", type:"PETG", id:"GFG02", nozzle:240, bed:70, density:1.28, flow:.94, mvs:18,
+    hotendRange:[220,280], bedRange:[20,110], source:"Bambu A1 mini PETG HFプロファイル",
+    rheo:{K:3207.01,n:.647,Tref:245,Ea:99.13,dref:.4,confidence:"代表値",
+      note:"PETGのpower-law測定値: 245°CでK=3207.01 Pa·sⁿ, n=0.647。Eaは235/245/255°CのK値をArrhenius回帰して算出した約99.1 kJ/mol。Bambu PETG HF固有値ではありません。",
+      url:"https://journals.indexcopernicus.com/api/file/viewByFileId/828385"}
+  },
+  generic_petg:{
+    name:"Generic PETG", type:"PETG", id:"GFG99", nozzle:255, bed:70, density:1.25, flow:.95, mvs:12,
+    hotendRange:[220,280], bedRange:[20,110], source:"Bambu Generic PETGプロファイル",
+    rheo:{K:3207.01,n:.647,Tref:245,Ea:99.13,dref:.4,confidence:"代表値",
+      note:"PETG文献代表値。実際のフィラメント銘柄や乾燥状態で変化します。",
+      url:"https://journals.indexcopernicus.com/api/file/viewByFileId/828385"}
+  },
+  tpu95:{
+    name:"Bambu TPU 95A", type:"TPU", id:"GFU01", nozzle:230, bed:30, density:1.22, flow:1.00, mvs:3.6,
+    hotendRange:[190,260], bedRange:[0,80], source:"Bambu A1 mini TPU 95Aプロファイル",
+    rheo:{K:20.0,n:1.0,Tref:230,Ea:273.7,dref:.4,confidence:"低信頼・代表値",
+      note:"別銘柄TPUの文献で210°C≈300 Pa·s, 230°C≈20 Pa·s、210–230°CではほぼNewtonianと報告。二点Arrhenius換算のため低信頼。Bambu TPU 95AではMVS=3.6 mm³/sを主要上限として併用します。",
+      url:"https://www.degruyter.com/document/doi/10.1515/ipp-2022-0026/html"}
+  }
 };
 
 let state={
  tool:"select", segments:[], selected:-1, selectedLine:-1,
  yaw:-.72, pitch:.58, radius:240, target:{x:90,y:90,z:15},
  dragging:false,lastX:0,lastY:0,drawAnchor:null,hoverWorld:null,history:[],
- parseError:null
+ parseError:null,
+ // The physical bead model represented by the E values currently in the text.
+ // This must NOT change merely because the user changes the nozzle selector.
+ gcodeModel:null,
+ rheoOverride:null
 };
 
 function v(x=0,y=0,z=0){return{x,y,z}}
@@ -394,20 +491,252 @@ function beadArea(width,height){
  return Math.PI*width*height/4;
 }
 function filamentArea(d=1.75){return Math.PI*(d/2)*(d/2)}
+
+const GAS_R=8.314462618; // J/(mol K)
+function currentRheo(){
+ const base=MATERIALS[$("material").value].rheo;
+ return state.rheoOverride?{...base,...state.rheoOverride}:{...base};
+}
+function consistencyAtTemp(rheo,tempC){
+ const T=tempC+273.15,Tr=rheo.Tref+273.15;
+ return rheo.K*Math.exp((rheo.Ea*1000/GAS_R)*(1/T-1/Tr));
+}
+function wallShearRate(Q,d,n){
+ if(!(Q>0&&d>0&&n>0))return 0;
+ const R=d/2; // mm; Q is mm^3/s, so units reduce to 1/s
+ const apparent=4*Q/(Math.PI*Math.pow(R,3));
+ return ((3*n+1)/(4*n))*apparent; // Rabinowitsch correction for power-law fluid
+}
+function apparentViscosity(Q,d,tempC,rheo=currentRheo()){
+ if(!(Q>0))return NaN;
+ const gd=wallShearRate(Q,d,rheo.n),K=consistencyAtTemp(rheo,tempC);
+ return K*Math.pow(gd,rheo.n-1);
+}
+function rheologyFlowLimit(mvs,d,tempC,mat=MATERIALS[$("material").value],rheo=currentRheo()){
+ // Hybrid literature/empirical model:
+ // 1) Bambu/filament-profile MVS remains the thermal/empirical ceiling.
+ // 2) A power-law capillary pressure model gives a conservative viscosity/nozzle correction.
+ // Calibrate equivalent pressure capacity at dref, material profile temperature, and Qref=MVS.
+ const Qref=mvs, dref=rheo.dref||.4, n=rheo.n;
+ if(!(Qref>0&&d>0&&dref>0&&n>0))return{qPressure:Qref,qAllow:Qref,viscRatio:1};
+ const Kprofile=consistencyAtTemp(rheo,mat.nozzle);
+ const Kcurrent=consistencyAtTemp(rheo,tempC);
+ const radiusRatio=d/dref;
+ const qPressure=Qref*Math.pow(Kprofile/Kcurrent,1/n)*Math.pow(radiusRatio,3+1/n);
+ const qAllow=Math.min(Qref,qPressure);
+ return{qPressure,qAllow,viscRatio:Kcurrent/Kprofile,Kprofile,Kcurrent};
+}
+function pressureRatio(Q,d,tempC,mvs,mat=MATERIALS[$("material").value],rheo=currentRheo()){
+ if(!(Q>0&&mvs>0))return 0;
+ const n=rheo.n,dref=rheo.dref||.4;
+ const Kc=consistencyAtTemp(rheo,tempC),Kr=consistencyAtTemp(rheo,mat.nozzle);
+ const gc=wallShearRate(Q,d,n),gr=wallShearRate(mvs,dref,n);
+ // ΔP ∝ (K/R)*γdot^n for equal capillary land length.
+ return (Kc/Kr)*(dref/d)*Math.pow(gc/gr,n);
+}
 function recommendedGeometry(nozzle,basis=$("designBasis")?.value||"bambu"){
  const d=+nozzle;
  const width=basis==="general"?1.10*d:d+0.02;
  const height=0.50*d;
  return{width:+width.toFixed(3),height:+height.toFixed(3)};
 }
+
+function uiProcessModel(){
+ return{
+   nozzle:+$("nozzle").value,
+   width:+$("lineWidth").value,
+   height:+$("layerHeight").value,
+   flow:+$("flow").value,
+   material:$("material").value
+ };
+}
+function parseProcessMarker(input){
+ const m=input.match(/^;\s*GCODEEDITOR_MODEL\s+nozzle=([0-9.]+)\s+width=([0-9.]+)\s+height=([0-9.]+)\s+flow=([0-9.]+)(?:\s+material=([^\s;]+))?/mi);
+ if(m)return{nozzle:+m[1],width:+m[2],height:+m[3],flow:+m[4],material:m[5]||$("material").value};
+ // A Bambu-style CONFIG_BLOCK can also tell us what the existing E values were designed for.
+ const read=k=>{
+   const rx=new RegExp(`^;\\s*${k}\\s*=\\s*([^;\\r\\n]+)`,"mi"),mm=input.match(rx);
+   return mm?mm[1].trim():null;
+ };
+ const nozzle=read("nozzle_diameter"),width=read("line_width"),height=read("layer_height"),flow=read("filament_flow_ratio");
+ if(nozzle&&width&&height)return{
+   nozzle:+String(nozzle).split(/[;,]/)[0],
+   width:+String(width).split(/[;,]/)[0],
+   height:+String(height).split(/[;,]/)[0],
+   flow:flow?+String(flow).split(/[;,]/)[0]:(+$("flow").value||1),
+   material:$("material").value
+ };
+ return null;
+}
+function sourceProcessModel(input){
+ return parseProcessMarker(input)||state.gcodeModel||uiProcessModel();
+}
+function targetProcessModel(){
+ const d=+$("nozzle").value,geo=recommendedGeometry(d);
+ return{
+   nozzle:d,
+   width:geo.width,
+   height:geo.height,
+   flow:+$("flow").value||MATERIALS[$("material").value].flow,
+   material:$("material").value
+ };
+}
+function replaceParam(raw,key,value,digits=5){
+ const semi=raw.indexOf(";"),code=semi>=0?raw.slice(0,semi):raw,comment=semi>=0?raw.slice(semi):"";
+ const rx=new RegExp(`(^|\\s)${key}-?\\d+(?:\\.\\d+)?`,"i");
+ const token=`${key}${fmt(value,digits)}`;
+ let c=code;
+ if(rx.test(c))c=c.replace(rx,(m,p)=>p+token);
+ else c=c.trimEnd()+" "+token;
+ return c+(comment?" "+comment:"");
+}
+function syncProcessMetadata(input,model){
+ let ls=input.split(/\r?\n/);
+ // Keep exactly one machine-readable source model marker.
+ ls=ls.filter(l=>!/^;\s*GCODEEDITOR_MODEL\b/i.test(l));
+ const marker=`; GCODEEDITOR_MODEL nozzle=${fmt(model.nozzle,3)} width=${fmt(model.width,3)} height=${fmt(model.height,3)} flow=${fmt(model.flow,4)} material=${model.material}`;
+ // Put the marker near the front but after an existing header start if present.
+ let at=0;
+ const hs=ls.findIndex(l=>l.trim()==="; HEADER_BLOCK_END");
+ if(hs>=0)at=hs+1;
+ ls.splice(at,0,marker);
+
+ const vals={
+   nozzle_diameter:model.nozzle,
+   printer_variant:model.nozzle,
+   line_width:model.width,
+   initial_layer_line_width:model.width,
+   initial_layer_infill_line_width:model.width,
+   outer_wall_line_width:model.width,
+   inner_wall_line_width:model.width,
+   internal_solid_infill_line_width:model.width,
+   sparse_infill_line_width:model.width,
+   skin_infill_line_width:model.width,
+   skeleton_infill_line_width:model.width,
+   support_line_width:model.width,
+   top_surface_line_width:model.width,
+   layer_height:model.height,
+   initial_layer_print_height:model.height,
+   filament_flow_ratio:model.flow
+ };
+ for(let i=0;i<ls.length;i++){
+   let raw=ls[i];
+   if(/^;\s*LINE_WIDTH:/i.test(raw))raw=`; LINE_WIDTH: ${fmt(model.width,3)}`;
+   if(/^;\s*LAYER_HEIGHT:/i.test(raw))raw=`; LAYER_HEIGHT: ${fmt(model.height,3)}`;
+   for(const [k,val] of Object.entries(vals)){
+     const rx=new RegExp(`^;\\s*${k}\\s*=.*$`,"i");
+     if(rx.test(raw))raw=`; ${k} = ${val}`;
+   }
+   ls[i]=raw;
+ }
+ return ls.join("\n");
+}
+function rewriteExtrusionForProcess(input,src,tgt){
+ const As=beadArea(src.width,src.height),At=beadArea(tgt.width,tgt.height);
+ const srcFlow=src.flow>0?src.flow:1,tgtFlow=tgt.flow>0?tgt.flow:1;
+ const ratio=(At*tgtFlow)/(As*srcFlow);
+ if(!Number.isFinite(ratio)||ratio<=0)return{text:input,ratio:NaN,scaled:0,errors:["押出し量Eの変換比を計算できません。"]};
+
+ let ls=input.split(/\r?\n/),absE=true,oldE=0,newE=0,scaled=0,errors=[];
+ for(let i=0;i<ls.length;i++){
+   const raw=ls[i],code=raw.split(";")[0].trim();
+   if(code==="M82"){absE=true;continue}
+   if(code==="M83"){absE=false;continue}
+   if(/^G92\b/i.test(code)){
+     const m=code.match(/(?:^|\s)E(-?\d+(?:\.\d+)?)/i);
+     if(m){oldE=+m[1];newE=+m[1];}
+     continue;
+   }
+   if(!/^G0?1\b/i.test(code))continue;
+   const em=code.match(/(?:^|\s)E(-?\d+(?:\.\d+)?)/i);
+   if(!em)continue;
+   const hasXYZ=/(?:^|\s)[XYZ]-?\d/i.test(code);
+   const ev=+em[1];
+
+   if(absE){
+     const delta=ev-oldE;
+     // Scale only positive material deposition coupled to an XYZ movement.
+     // Retractions/unretractions without XYZ retain their original filament distance.
+     const newDelta=(delta>1e-9&&hasXYZ)?delta*ratio:delta;
+     const targetE=newE+newDelta;
+     if(delta>1e-9&&hasXYZ)scaled++;
+     ls[i]=replaceParam(raw,"E",targetE,5);
+     oldE=ev;newE=targetE;
+   }else{
+     const newVal=(ev>1e-9&&hasXYZ)?ev*ratio:ev;
+     if(ev>1e-9&&hasXYZ)scaled++;
+     ls[i]=replaceParam(raw,"E",newVal,5);
+   }
+ }
+ return{text:ls.join("\n"),ratio,scaled,errors};
+}
+function processConsistencyPass(input,{fix=true}={}){
+ const src=sourceProcessModel(input),tgt=targetProcessModel();
+ const changes=[],warnings=[],errors=[];
+ const geomMismatch=Math.abs(src.nozzle-tgt.nozzle)>.001||
+                    Math.abs(src.width-tgt.width)>.005||
+                    Math.abs(src.height-tgt.height)>.005||
+                    Math.abs(src.flow-tgt.flow)>.002;
+
+ let result=input,ratio=1,scaled=0;
+ if(geomMismatch){
+   if(!fix){
+     warnings.push(`現在のEは ノズル${fmt(src.nozzle,2)} / 線幅${fmt(src.width,3)} / 高さ${fmt(src.height,3)} mm相当ですが、選択条件は ノズル${fmt(tgt.nozzle,2)} / 推奨線幅${fmt(tgt.width,3)} / 推奨高さ${fmt(tgt.height,3)} mmです。`);
+   }else{
+     const rw=rewriteExtrusionForProcess(result,src,tgt);
+     result=rw.text;ratio=rw.ratio;scaled=rw.scaled;errors.push(...rw.errors);
+     if(!rw.errors.length){
+       $("lineWidth").value=fmt(tgt.width,3);
+       $("layerHeight").value=fmt(tgt.height,3);
+       result=syncProcessMetadata(result,tgt);
+       state.gcodeModel={...tgt};
+       changes.push(`ノズル変更に合わせ、線幅 ${fmt(src.width,3)} → ${fmt(tgt.width,3)} mm、高さ ${fmt(src.height,3)} → ${fmt(tgt.height,3)} mm に自動設計しました。`);
+       changes.push(`樹脂線断面積×Flowの比から、XYZ移動を伴う正の押出しEを ×${fmt(ratio,4)} に変換しました（${scaled} 行）。`);
+       changes.push(`式: ΔE_new = ΔE_old × (A_new×Flow_new)/(A_old×Flow_old)。リトラクトやEだけの動作量は保持しました。`);
+     }
+   }
+ }else if(fix){
+   result=syncProcessMetadata(result,tgt);
+   state.gcodeModel={...tgt};
+ }
+
+ // Flow-limited speed rule. Never speed a custom path up automatically; only cap an unsafe value.
+ const A=beadArea(tgt.width,tgt.height),mat=MATERIALS[$("material").value],mvs=+$("mvs").value||mat.mvs;
+ const safety=clamp((+$("safety").value||75)/100,.2,1);
+ const rf=rheologyFlowLimit(mvs,tgt.nozzle,+$("hotend").value||mat.nozzle,mat,currentRheo());
+ const vLimit=rf.qAllow/A*safety;
+ let vNow=+$("printSpeed").value||0;
+ if(vNow>vLimit){
+   if(fix){
+     $("printSpeed").value=fmt(vLimit,2);
+     changes.push(`造形速度 ${fmt(vNow,2)} → ${fmt(vLimit,2)} mm/s に制限しました（MVSと材料粘性・ノズル圧力モデルの小さい方×安全率）。`);
+     vNow=vLimit;
+   }else errors.push(`造形速度 ${fmt(vNow,2)} mm/s が材料粘性を含む安全上限 ${fmt(vLimit,2)} mm/s を超えています。`);
+ }
+ const travelLimit=MACHINES[$("machine").value].travelRec;
+ const travelNow=+$("travelSpeed").value||0;
+ if(travelNow>travelLimit&&fix){
+   $("travelSpeed").value=fmt(travelLimit,1);
+   changes.push(`非造形移動速度を非平面軌跡向け保守上限 ${fmt(travelLimit,1)} mm/s に制限しました。`);
+ }
+
+ return{text:result,src,tgt,ratio,scaled,changes,warnings,errors,vLimit};
+}
 function designResult(useRecommendedGeometry=true){
  const mat=MATERIALS[$("material").value],mach=MACHINES[$("machine").value],d=+$("nozzle").value;
  const geo=recommendedGeometry(d),w=useRecommendedGeometry?geo.width:+$("lineWidth").value,h=useRecommendedGeometry?geo.height:+$("layerHeight").value;
  const A=beadArea(w,h),mvs=+$("mvs").value||mat.mvs,safety=clamp((+$("safety").value||75)/100,.2,1);
- const vmax=mvs/A,vrec=vmax*safety,flow=+$("flow").value||mat.flow;
+ const flow=+$("flow").value||mat.flow,currentV=+$("printSpeed").value||0,currentQ=A*currentV;
+ const rheo=currentRheo(),temp=+$("hotend").value||mat.nozzle;
+ const rf=rheologyFlowLimit(mvs,d,temp,mat,rheo);
+ const qLimit=rf.qAllow;
+ const vmax=qLimit/A,vrec=vmax*safety;
  const e100=A*100/filamentArea(1.75)*flow;
- const currentV=+$("printSpeed").value||0,currentQ=A*currentV;
- return{mat,mach,d,w,h,A,mvs,safety,vmax,vrec,flow,e100,currentV,currentQ,travel:mach.travelRec,geo};
+ const eta=currentQ>0?apparentViscosity(currentQ,d,temp,rheo):NaN;
+ const gamma=currentQ>0?wallShearRate(currentQ,d,rheo.n):0;
+ const pRatio=currentQ>0?pressureRatio(currentQ,d,temp,mvs,mat,rheo):0;
+ return{mat,mach,d,w,h,A,mvs,safety,vmax,vrec,flow,e100,currentV,currentQ,travel:mach.travelRec,geo,
+        rheo,temp,eta,gamma,pRatio,qPressure:rf.qPressure,qLimit,viscRatio:rf.viscRatio};
 }
 function updateDesignModel(){
  const r=designResult(true);
@@ -417,18 +746,24 @@ function updateDesignModel(){
  $("maxSpeedModel").textContent=`${fmt(r.vmax,1)} mm/s`;
  $("recSpeedModel").textContent=`${fmt(r.vrec,1)} mm/s`;
  $("recE100").textContent=`${fmt(r.e100,2)} mm`;
- const pct=r.mvs>0?100*r.currentQ/r.mvs:0;
- $("currentQ").innerHTML=`${fmt(r.currentQ,2)} mm³/s <span class="${pct>100?'designWarn':''}">(${fmt(pct,0)}% MVS)</span>`;
+ const pct=r.qLimit>0?100*r.currentQ/r.qLimit:0;
+ $("currentQ").innerHTML=`${fmt(r.currentQ,2)} mm³/s <span class="${pct>100?'designWarn':''}">(${fmt(pct,0)}% 許容Q)</span>`;
+ $("currentEta").textContent=Number.isFinite(r.eta)?`${fmt(r.eta,1)} Pa·s`:"—";
+ $("rheoQmax").textContent=`${fmt(r.qLimit,2)} mm³/s`;
+
  const body=$("modelExampleBody");
- if(body)body.innerHTML=`<br>素材: <b>${r.mat.name}</b> / ノズル: <b>${fmt(r.d,2)} mm</b> / MVS: <b>${fmt(r.mvs,1)} mm³/s</b><br>`+
+ if(body)body.innerHTML=`<br>素材: <b>${r.mat.name}</b> / ノズル: <b>${fmt(r.d,2)} mm</b> / 温度: <b>${fmt(r.temp,0)}℃</b><br>`+
+   `文献レオロジー: Kref=${fmt(r.rheo.K,2)} Pa·sⁿ, n=${fmt(r.rheo.n,3)}, Tref=${fmt(r.rheo.Tref,0)}℃, Ea=${fmt(r.rheo.Ea,1)} kJ/mol<br>`+
    `w=${fmt(r.w,3)} mm, h=${fmt(r.h,3)} mm → A=${fmt(r.A,4)} mm²<br>`+
-   `v_max = ${fmt(r.mvs,2)} ÷ ${fmt(r.A,4)} = <b>${fmt(r.vmax,2)} mm/s</b><br>`+
-   `安全率 ${fmt(r.safety*100,0)}% → v_rec = <b>${fmt(r.vrec,2)} mm/s</b><br>`+
+   `Bambu/材料MVS=${fmt(r.mvs,2)} mm³/s、粘性・ノズル補正Q=${fmt(r.qPressure,2)} mm³/s → 採用Qmax=<b>${fmt(r.qLimit,2)} mm³/s</b><br>`+
+   `v_max = Qmax/A = <b>${fmt(r.vmax,2)} mm/s</b>、安全率 ${fmt(r.safety*100,0)}% → v_rec=<b>${fmt(r.vrec,2)} mm/s</b><br>`+
+   `現在Q=${fmt(r.currentQ,3)} mm³/s、壁せん断速度 γ̇w=${fmt(r.gamma,0)} s⁻¹、見かけ粘度 η=${Number.isFinite(r.eta)?fmt(r.eta,2):"—"} Pa·s、圧力比 ΔP/ΔPref=${fmt(r.pRatio,3)}<br>`+
    `100 mmの線に必要なE ≈ <b>${fmt(r.e100,3)} mm</b>（Flow=${fmt(r.flow,3)}）<br>`+
-   `非造形移動のアプリ初期値: <b>${fmt(r.travel,0)} mm/s</b>（MVSからではなく、非平面軌跡向けの保守値）`;
+   `非造形移動のアプリ初期値: <b>${fmt(r.travel,0)} mm/s</b>`;
 }
 function syncMaterialModelDefaults(){
  const mat=MATERIALS[$("material").value];
+ state.rheoOverride=null;
  $("mvs").value=mat.mvs;
  $("hotend").value=mat.nozzle;
  $("bedtemp").value=mat.bed;
@@ -447,7 +782,7 @@ function applyRecommendedDesign(){
    `線幅 ${fmt(rr.w,3)} mm、高さ ${fmt(rr.h,3)} mm。`,
    `MVS ${fmt(rr.mvs,1)} mm³/s、安全率 ${fmt(rr.safety*100,0)}% → 推奨造形速度 ${fmt(rr.vrec,2)} mm/s。`,
    `非造形移動速度は保守値 ${fmt(rr.travel,0)} mm/s を入力しました。`,
-   `まだG-code本体は変更していません。「一括反映（温度・全速度）」でF値等へ反映してください。`
+   `まだG-code本体は変更していません。「一括反映（ノズル・E・温度・速度）」で線幅・高さに応じたE量変換、F値、温度をまとめて反映してください。`
  ],[],"推奨設計値を入力欄へ設定しました");
 }
 
@@ -802,11 +1137,33 @@ function setView(name){
 }
 document.querySelectorAll(".viewBtn").forEach(b=>b.onclick=()=>setView(b.dataset.view));
 
+
+function fillRheoModal(){
+ const r=currentRheo(),mat=MATERIALS[$("material").value];
+ $("rheoN").value=r.n;$("rheoK").value=r.K;$("rheoTref").value=r.Tref;$("rheoEa").value=r.Ea;$("rheoDref").value=r.dref||.4;
+ $("rheoSourceBox").innerHTML=`<span class="rheoConfidence">${escapeHtml(r.confidence||"代表値")}</span> ${escapeHtml(r.note||"")}<br><a href="${r.url}" target="_blank" rel="noopener">${r.url}</a>`;
+}
+$("rheoBtn").onclick=()=>{fillRheoModal();$("rheoModal").classList.add("show")};
+$("closeRheoBtn").onclick=()=>$("rheoModal").classList.remove("show");
+$("rheoModal").onclick=e=>{if(e.target===$("rheoModal"))$("rheoModal").classList.remove("show")};
+$("resetRheoBtn").onclick=()=>{state.rheoOverride=null;fillRheoModal();updateDesignModel()};
+$("saveRheoBtn").onclick=()=>{
+ const base=MATERIALS[$("material").value].rheo;
+ const next={
+   K:+$("rheoK").value,n:+$("rheoN").value,Tref:+$("rheoTref").value,Ea:+$("rheoEa").value,dref:+$("rheoDref").value,
+   confidence:"ユーザー設定",note:"ユーザーが編集したレオロジーパラメータです。",url:base.url
+ };
+ if(!(next.K>0&&next.n>0&&next.n<=1.5&&next.Tref>0&&next.Ea>=0&&next.dref>0)){
+   alert("粘性パラメータを確認してください。K>0, n>0, Tref>0, Ea≥0, 基準ノズル>0 が必要です。");return;
+ }
+ state.rheoOverride=next;$("rheoModal").classList.remove("show");updateDesignModel();
+};
+
 $("material").addEventListener("change",()=>{syncMaterialModelDefaults();updateTemperatureBadge();reparse(false)});
 $("machine").addEventListener("change",()=>{state.selected=-1;updateDesignModel();reparse(false)});
 $("nozzle").addEventListener("change",()=>{state.selected=-1;updateDesignModel();reparse(false)});
 $("designBasis").addEventListener("change",updateDesignModel);
-["mvs","safety","lineWidth","layerHeight","flow","printSpeed"].forEach(id=>$(id).addEventListener("input",updateDesignModel));
+["mvs","safety","lineWidth","layerHeight","flow","printSpeed","hotend"].forEach(id=>$(id).addEventListener("input",updateDesignModel));
 $("applyDesignBtn").onclick=applyRecommendedDesign;
 $("modelHelpBtn").onclick=()=>{$("modelHelpModal").classList.add("show");updateDesignModel()};
 $("closeModelHelp").onclick=()=>$("modelHelpModal").classList.remove("show");
@@ -908,20 +1265,36 @@ function updateTemperatureBadge(){
  else{b.textContent="温度G-code OK";b.className="badge ok";}
 }
 function exportPreflight(){
- const mat=MATERIALS[$("material").value],noz=+$("nozzle").value,w=+$("lineWidth").value,h=+$("layerHeight").value;
- const notes=[],warnings=[],errors=[];
- const tr=temperatureSafetyPass(ta.value,{fix:true});notes.push(...tr.changes);errors.push(...tr.errors);
- if(w>noz*1.6)warnings.push(`線幅 ${w} mm はノズル径 ${noz} mm の1.6倍を超えています。0.4 mmノズルに0.8 mm線幅など、意図した太線か確認してください。`);
- if(h>noz*.8)warnings.push(`高さ ${h} mm はノズル径 ${noz} mm の80%を超えています。`);
+ const mat=MATERIALS[$("material").value],notes=[],warnings=[],errors=[];
+ // First, make nozzle / bead geometry / E physically consistent.
+ const pc=processConsistencyPass(ta.value,{fix:true});
+ notes.push(...pc.changes);warnings.push(...pc.warnings);errors.push(...pc.errors);
+
+ // Then repair/check temperatures on the already corrected G-code.
+ const tr=temperatureSafetyPass(pc.text,{fix:true});
+ notes.push(...tr.changes);warnings.push(...tr.warnings);errors.push(...tr.errors);
+
+ const w=+$("lineWidth").value,h=+$("layerHeight").value,noz=+$("nozzle").value;
  const A=beadArea(w,h),q=A*(+$("printSpeed").value||0),mvs=+$("mvs").value||mat.mvs;
- if(q>mvs)errors.push(`現在の造形流量 ${fmt(q,2)} mm³/s が MVS ${fmt(mvs,2)} mm³/s を超えています。造形速度を下げてください。`);
- else if(q>mvs*(+$("safety").value||75)/100)warnings.push(`現在の造形流量 ${fmt(q,2)} mm³/s は設定した安全率の推奨範囲を超えています。`);
+ const rf=rheologyFlowLimit(mvs,noz,+$("hotend").value||mat.nozzle,mat,currentRheo());
+ const safeQ=rf.qAllow*clamp((+$("safety").value||75)/100,.2,1);
+ if(q>rf.qAllow+1e-9)errors.push(`修正後の造形流量 ${fmt(q,2)} mm³/s が粘性補正後Q上限 ${fmt(rf.qAllow,2)} mm³/s を超えています。`);
+ else if(q>safeQ+1e-9)errors.push(`修正後の造形流量 ${fmt(q,2)} mm³/s が安全率込み粘性上限 ${fmt(safeQ,2)} mm³/s を超えています。`);
+
+ // These are errors now, not optional warnings: auto-repair should have made them impossible.
+ const geo=recommendedGeometry(noz);
+ if(Math.abs(w-geo.width)>.005||Math.abs(h-geo.height)>.005)
+   errors.push(`自動修正後も線幅/高さが推奨値 ${geo.width}/${geo.height} mm と一致しません。`);
+
  return{text:tr.text,notes,warnings,errors};
 }
 
 function applyAllSettings(){
  saveHistory();
- let ls=ta.value.split(/\r?\n/), h=+$("hotend").value, b=+$("bedtemp").value;
+
+ // Nozzle/material change must first update bead geometry and E, otherwise only changing F/temperature is physically inconsistent.
+ const pc=processConsistencyPass(ta.value,{fix:true});
+ let ls=pc.text.split(/\r?\n/), h=+$("hotend").value, b=+$("bedtemp").value;
  const pf=Math.max(1,Math.round((+$("printSpeed").value||1)*60));
  const tf=Math.max(1,Math.round((+$("travelSpeed").value||1)*60));
  let tempChanges=0,speedChanges=0;
@@ -967,12 +1340,13 @@ function applyAllSettings(){
  const tempPass=temperatureSafetyPass(ls.join("\n"),{fix:true});
  ta.value=tempPass.text;reparse(false);saveHistory();updateTemperatureBadge();
  showRepairReport([
+   ...pc.changes,
    `温度設定を ${tempChanges} 箇所更新しました。`,
    `XYZ移動の速度Fを ${speedChanges} 行更新しました。`,
    `造形速度=${fmt(pf/60,2)} mm/s、移動速度=${fmt(tf/60,2)} mm/s。`,
    `Eだけのパージ/リトラクト速度は変更していません。`,
    ...tempPass.changes
- ],tempPass.errors,'一括設定を反映し、温度安全検査も実行しました');
+ ],[...pc.errors,...pc.warnings,...tempPass.errors],'一括設定：ノズル・E・温度・速度を理論モデルで整合させました');
 }
 $("applySettings").onclick=applyAllSettings;
 
@@ -991,7 +1365,8 @@ function commandBefore(lines,re,limit){for(let i=0;i<Math.min(limit,lines.length
 function lastMovementIndex(lines){for(let i=lines.length-1;i>=0;i--)if(/^G0?1\b/i.test(lines[i].split(";")[0].trim()))return i;return -1}
 function autoRepairGcode(){
  saveHistory();
- let ls=ta.value.split(/\r?\n/).map(normalizeKnownLine), changes=[],warnings=[];
+ const pc=processConsistencyPass(ta.value,{fix:true});
+ let ls=pc.text.split(/\r?\n/).map(normalizeKnownLine), changes=[...pc.changes],warnings=[...pc.warnings,...pc.errors];
  while(ls.length&&ls[0].trim()==="")ls.shift(); while(ls.length&&ls[ls.length-1].trim()==="")ls.pop();
  let firstMove=ls.findIndex(l=>/^G0?1\b/i.test(l.split(";")[0].trim())); if(firstMove<0)firstMove=ls.length;
  const starters=[];
@@ -1060,12 +1435,16 @@ G1 Z5 F3000
 G92 E0
 ; ここから線画
 `;
+ state.gcodeModel=uiProcessModel();
  state.selected=-1;state.drawAnchor=null;state.history=[];reparse(false);saveHistory();
 };
 $("openBtn").onclick=()=>$("fileInput").click();
 $("fileInput").onchange=async e=>{
- const f=e.target.files[0];if(!f)return;ta.value=await f.text();state.history=[];reparse(false);saveHistory();
+ const f=e.target.files[0];if(!f)return;ta.value=await f.text();
+ state.gcodeModel=parseProcessMarker(ta.value)||uiProcessModel();
+ state.history=[];reparse(false);saveHistory();
  const r=parseGcode(ta.value);if(r.firstTemp!==null)$("hotend").value=r.firstTemp;if(r.firstBed!==null)$("bedtemp").value=r.firstBed;
+ updateDesignModel();updateTemperatureBadge();
  e.target.value="";
 };
 $("formatBtn").onclick=autoRepairGcode;
@@ -1130,7 +1509,7 @@ function makeConfigBlock(){
  ["nozzle_diameter",String(noz)],["nozzle_type",noz>=.6?"hardened_steel":"stainless_steel"],
  ["printable_area",`0x0,${mach.bed[0]}x0,${mach.bed[0]}x${mach.bed[1]},0x${mach.bed[1]}`],["printable_height",String(mach.bed[2])],
  ["filament_settings_id",`${mat.name} @BBL ${mach.code}`],["filament_type",mat.type],["filament_ids",mat.id],
- ["filament_colour","#FFFFFF"],["filament_diameter","1.75"],["filament_density",String(mat.density)],["filament_flow_ratio",String(flow)],["filament_max_volumetric_speed",String(+( $("mvs").value || mat.mvs ))],
+ ["filament_colour","#FFFFFF"],["filament_diameter","1.75"],["filament_density",String(mat.density)],["filament_flow_ratio",String(flow)],["filament_max_volumetric_speed",String(+( $("mvs").value || mat.mvs ))],["rheology_model","power_law_arrhenius"],["rheology_n",String(currentRheo().n)],["rheology_K_ref",String(currentRheo().K)],["rheology_T_ref",String(currentRheo().Tref)],["rheology_Ea_kJ_mol",String(currentRheo().Ea)],
  ["filament_map","1"],["filament_is_support","0"],["filament_soluble","0"],["curr_bed_type","Textured PEI Plate"],
  ["print_settings_id","GcodeEditor custom"],["nozzle_temperature",String(h)],["nozzle_temperature_initial_layer",String(h)],
  ["textured_plate_temp",String(b)],["textured_plate_temp_initial_layer",String(b)],["use_relative_e_distances","0"],
@@ -1300,10 +1679,10 @@ const SETTING_HELP={
  layerHeight:{title:'高さ',body:'<p>樹脂線を横から見た<b>断面の高さ h</b>です。通常積層ならレイヤー高さに相当します。</p><p>非平面軌跡では「次のZまでの距離」そのものではなく、押し出した樹脂線の厚みを表す設計値です。初期設計はノズル径の0.50倍です。</p>'},
  printSpeed:{title:'造形速度',body:'<p>フィラメントを押し出しながらXYZを動かすG1の速度です。画面ではmm/sで指定し、G-codeではF=mm/minへ自動換算します。</p><p>例：20 mm/s → F1200。</p>'},
  travelSpeed:{title:'移動速度',body:'<p>フィラメントを押し出さずにXYZを動かすG0/G1の速度です。一括反映では非造形移動のFをこの値へ変更します。</p><p>Eだけを動かすパージやリトラクトは機構上重要なので、一括変更の対象外です。</p>'},
- mvs:{title:'MVS（最大体積流量）',body:'<p><b>1秒間に、ホットエンドが安定して溶かして出せる樹脂の体積の上限</b>です。単位は mm³/s です。</p><p>必要流量は <b>Q=A×v</b> で、樹脂線の断面積Aが大きいほど、同じ速度vでも多くの樹脂が必要です。したがって理論上の速度上限は <b>v=MVS/A</b> です。</p><p>MVSは材料だけで完全には決まらず、温度・ホットエンド・ノズル径にも依存します。アプリの値はBambu Studio等のプロファイルを出発点にし、編集可能にしています。</p>'},
+ mvs:{title:'MVS（最大体積流量）',body:'<p><b>1秒間に、実機が安定して溶かして出せる樹脂量の経験的上限</b>です。単位は mm³/s です。</p><p>v8ではMVSだけで速度を決めません。材料のpower-law粘度、温度、ノズル径から求める圧力側の上限Q_rheoと比較し、<b>Qmax=min(MVS,Q_rheo)</b>を使います。</p><p>MVSは熱が材料へ伝わる速さ、ギヤの押出能力、ホットエンド構造など複雑な要因を含むため、理論粘性モデルを補完する実機データとして残しています。</p>'},
  safety:{title:'安全率',body:'<p>MVSから計算した理論上限を、そのまま使わず少し下げる割合です。</p><p>75%なら <b>推奨速度 = 理論上限 × 0.75</b>。湿気、温度変化、曲がり角、冷却、非平面軌跡など、単純な数式に入っていない条件のための余裕です。</p>'},
  temperatureSafety:{title:'温度G-code安全検査',body:'<p>3MF出力前に、最初の押出しより前から最後の押出しまでの M104/M109（ノズル）と M140/M190（ベッド）を検査します。</p><p>たとえばPLAで <b>M109 S2</b> のような不自然に低い値を見つけたら、画面のノズル温度へ自動修正します。さらに最初の押出し前に安全なM109温度待機が無ければ追加します。</p><p>今回見つかった <b>200→2、60→6</b> の数値整形バグを、数値関数の修正と独立した安全検査の二重で防ぎます。</p>'},
- repair:{title:'自動修正・検査',body:'<p>単なる「再解析」ではなく、G-codeを安全側に整えてから表示を更新します。</p><p>G90、M82/M83、T0、G28、温度設定/待機、最後のM104 S0・M140 S0・ファンOFF・M84を検査し、足りない基本条件を補います。G1X10Y20のような基本的な詰め書きも整形します。</p><p><b>重要：</b>Bambu独自Mコードなど意味を断定できない命令は削除しません。自動修正後も実機印刷前に内容を確認してください。</p>'}
+ repair:{title:'自動修正・検査',body:'<p>単なる「再解析」ではなく、G-codeを安全側に整えてから表示を更新します。</p><p>G90、M82/M83、T0、G28、温度設定/待機、最後のM104 S0・M140 S0・ファンOFF・M84を検査します。さらに、選択ノズルと現在G-codeの線幅・高さが合わなければ、推奨断面へ変更し、各造形区間のEを断面積×Flow比で変換します。G1X10Y20のような基本的な詰め書きも整形します。</p><p><b>重要：</b>Bambu独自Mコードなど意味を断定できない命令は削除しません。自動修正後も実機印刷前に内容を確認してください。</p>'}
 };
 function showSettingHelp(key){const h=SETTING_HELP[key];if(!h)return;$("settingHelpTitle").textContent=h.title;$("settingHelpBody").innerHTML=h.body;$("settingHelpPanel").classList.add('show')}
 $("tempSafetyBadge")?.addEventListener("click",()=>showSettingHelp("temperatureSafety"));
@@ -1319,6 +1698,8 @@ $("helpModal").onclick=e=>{if(e.target===$("helpModal"))$("helpModal").classList
 
 // initial sample
 ta.value=SAMPLE_GCODE;
+// The bundled sample was authored for the original 0.8 mm setup.
+state.gcodeModel={nozzle:0.8,width:0.8,height:0.4,flow:+$("flow").value||0.98,material:$("material").value};
 reparse(false);saveHistory();
 updateDesignModel();updateTemperatureBadge();
 requestAnimationFrame(()=>{resize();setView("iso")});
